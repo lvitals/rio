@@ -1,0 +1,275 @@
+-- lib/rio/utils/compat.lua
+-- Compatibility layer for different Lua versions (5.1, 5.2, 5.3, 5.4)
+-- Centralizes dependencies and provide fallbacks for missing libraries.
+
+local M = {}
+
+-- Lua version detection
+local version = _VERSION:match("Lua (%d%.%d)")
+M.lua_version = tonumber(version)
+
+-- Returns the current Lua binary path or command
+function M.get_lua_bin()
+    -- If running under a LuaRocks wrapper, arg[-1] might contain a complex string.
+    -- We want the actual Lua executable.
+    local bin = arg and arg[-1] or "lua"
+    
+    -- If the binary name looks like a complex path or contains suspicious characters
+    -- (like code from a wrapper), we fallback to a version-specific binary name.
+    if bin:find("[%(%);]") or #bin > 256 then
+        local ver = _VERSION:match("Lua (%d%.%d)")
+        if ver then return "lua" .. ver end
+        return "lua"
+    end
+    
+    return bin
+end
+
+-- table.unpack / unpack
+M.unpack = table.unpack or unpack
+
+-- load / loadstring
+M.load = function(chunk, chunkname, mode, env)
+    if M.lua_version <= 5.1 then
+        local f, err = loadstring(chunk, chunkname)
+        if f and env then setfenv(f, env) end
+        return f, err
+    else
+        -- Lua 5.2+ load(chunk, chunkname, mode, env)
+        -- If env is nil, we should explicitly use _G to avoid 
+        -- "attempt to index a nil value (upvalue '_ENV')"
+        return load(chunk, chunkname, mode, env or _G)
+    end
+end
+
+-- Bitwise operations
+local bit = nil
+if M.lua_version >= 5.3 then
+    local code = [[
+        local M = {}
+        function M.band(a, ...)
+            local res = a
+            for _, v in ipairs({...}) do res = res & v end
+            return res
+        end
+        function M.bor(a, ...)
+            local res = a
+            for _, v in ipairs({...}) do res = res | v end
+            return res
+        end
+        function M.bxor(a, ...)
+            local res = a
+            for _, v in ipairs({...}) do res = res ~ v end
+            return res
+        end
+        function M.bnot(a) return ~a end
+        function M.lshift(a, b) return a << b end
+        function M.rshift(a, b) return a >> b end
+        return M
+    ]]
+    local f = load(code)
+    if f then bit = f() end
+end
+
+if not bit or type(bit) ~= "table" then
+    local ok, b = pcall(require, "bit32")
+    if ok then bit = b end
+end
+
+if not bit or type(bit) ~= "table" then
+    local ok, b = pcall(require, "bit")
+    if ok then bit = b end
+end
+
+if not bit or type(bit) ~= "table" then
+    local function to_bits(n)
+        local t = {}
+        for i = 1, 32 do t[i] = n % 2; n = math.floor(n / 2) end
+        return t
+    end
+    local function from_bits(t)
+        local n = 0; local power = 1
+        for i = 1, 32 do n = n + t[i] * power; power = power * 2 end
+        return n
+    end
+    bit = {
+        band = function(a, ...)
+            local res = a % 4294967296; local args = { ... }
+            for i = 1, #args do
+                local b = args[i] % 4294967296
+                local ta = to_bits(res); local tb = to_bits(b); local tres = {}
+                for j = 1, 32 do tres[j] = (ta[j] == 1 and tb[j] == 1) and 1 or 0 end
+                res = from_bits(tres)
+            end
+            return res
+        end,
+        bor = function(a, ...)
+            local res = a % 4294967296; local args = { ... }
+            for i = 1, #args do
+                local b = args[i] % 4294967296
+                local ta = to_bits(res); local tb = to_bits(b); local tres = {}
+                for j = 1, 32 do tres[j] = (ta[j] == 1 or tb[j] == 1) and 1 or 0 end
+                res = from_bits(tres)
+            end
+            return res
+        end,
+        bxor = function(a, ...)
+            local res = a % 4294967296; local args = { ... }
+            for i = 1, #args do
+                local b = args[i] % 4294967296
+                local ta = to_bits(res); local tb = to_bits(b); local tres = {}
+                for j = 1, 32 do tres[j] = (ta[j] ~= tb[j]) and 1 or 0 end
+                res = from_bits(tres)
+            end
+            return res
+        end,
+        bnot = function(a)
+            local ta = to_bits(a % 4294967296); local res = {}
+            for i = 1, 32 do res[i] = (ta[i] == 1) and 0 or 1 end
+            return from_bits(res)
+        end,
+        lshift = function(a, b) return (a * (2 ^ b)) % 4294967296 end,
+        rshift = function(a, b) return math.floor((a % 4294967296) / (2 ^ b)) end
+    }
+end
+
+M.bit = bit
+M.band, M.bor, M.bxor, M.bnot, M.lshift, M.rshift = bit.band, bit.bor, bit.bxor, bit.bnot, bit.lshift, bit.rshift
+
+-- Path and environment compatibility
+function M.get_runtime_paths(framework_lib_path)
+    local cmd = "luarocks path --local"
+    if M.lua_version then
+        cmd = "luarocks --lua-version=" .. M.lua_version .. " path --local"
+    end
+
+    local handle = io.popen(cmd, "r")
+    local output = handle:read("*a")
+    handle:close()
+
+    local lp = output:match("LUA_PATH='([^']+)'") or ""
+    local lcp = output:match("LUA_CPATH='([^']+)'") or ""
+
+    local final_lp = (framework_lib_path or "") .. ";" .. lp .. ";" .. (os.getenv("LUA_PATH") or "")
+    local final_lcp = lcp .. ";" .. (os.getenv("LUA_CPATH") or "")
+    
+    if M.lua_version == 5.1 then
+        local home = os.getenv("HOME") or "/home/leandro"
+        final_lcp = home .. "/.luarocks/lib/lua/5.1/socket/?.so;" .. home .. "/.luarocks/lib/lua/5.1/mime/?.so;" .. final_lcp
+    end
+
+    return final_lp, final_lcp
+end
+
+-- JSON compatibility
+local json_ok, cjson = pcall(require, "cjson")
+if json_ok then
+    -- Disable escaping forward slashes for better readability in API responses
+    pcall(function() 
+        cjson.encode_escape_forward_slash(false)
+    end)
+    M.json = cjson
+else
+    M.json = {
+        encode = function(val)
+            local function serialize(v)
+                if type(v) == "table" then
+                    local is_array = #v > 0; local parts = {}
+                    if is_array then
+                        for _, item in ipairs(v) do table.insert(parts, serialize(item)) end
+                        return "[" .. table.concat(parts, ",") .. "]"
+                    else
+                        local keys = {}; for k in pairs(v) do table.insert(keys, k) end
+                        table.sort(keys, function(a,b) return tostring(a) < tostring(b) end)
+                        for _, k in ipairs(keys) do
+                            table.insert(parts, string.format("%q:%s", tostring(k), serialize(v[k])))
+                        end
+                        return "{" .. table.concat(parts, ",") .. "}"
+                    end
+                elseif type(v) == "string" then return string.format("%q", v)
+                elseif type(v) == "number" or type(v) == "boolean" then return tostring(v)
+                else return "null" end
+            end
+            return serialize(val)
+        end,
+        decode = function() error("JSON decoding fallback not implemented.") end
+    }
+end
+
+-- Signal compatibility
+local sig_ok, posix_signal = pcall(require, "posix.signal")
+if sig_ok then
+    M.signal = posix_signal
+else
+    M.signal = { signal = function() end, SIGINT = 2, SIGTERM = 15 }
+end
+
+-- Header compatibility helper
+local function create_header_obj(initial)
+    local h = {}
+    for k,v in pairs(initial or {}) do h[k:lower()] = v end
+    local obj = {
+        get = function(self, k) return h[k:lower()] end,
+        upsert = function(self, k, v) h[k:lower()] = v end,
+        append = function(self, k, v) h[k:lower()] = v end,
+        each = function(self) return pairs(h) end
+    }
+    return obj
+end
+M.new_headers = create_header_obj
+
+-- HTTP Server Fallback (LuaSocket based)
+local http_ok, http_server = pcall(require, "http.server")
+if http_ok then
+    M.http_server = http_server
+else
+    M.http_server = {
+        listen = function(options)
+            local socket = require("socket")
+            local url = require("net.url")
+            local master = assert(socket.bind(options.host or "0.0.0.0", options.port or 8080))
+            local ip, port = master:getsockname()
+            print(string.format("Rio (LuaSocket fallback) listening on http://%s:%d", ip, port))
+            while true do
+                local client = master:accept()
+                client:settimeout(10)
+                local line = client:receive()
+                if line then
+                    local method, full_path = line:match("^(%S+)%s+(%S+)%s+HTTP/%d%.%d$")
+                    if method then
+                        local req_headers = {}
+                        while true do
+                            local h_line = client:receive()
+                            if not h_line or h_line == "" then break end
+                            local name, value = h_line:match("^(.-):%s*(.*)$")
+                            if name then req_headers[name:lower()] = value end
+                        end
+                        local body = ""
+                        local clen = tonumber(req_headers["content-length"])
+                        if clen and clen > 0 then body = client:receive(clen) end
+                        local stream = {
+                            headers_sent = false,
+                            get_headers = function() return create_header_obj({ [":method"] = method, [":path"] = full_path }) end,
+                            write_headers = function(self, h)
+                                self.headers_sent = true
+                                client:send("HTTP/1.1 " .. (h:get(":status") or "200") .. " OK\r\n")
+                                for k, v in h:each() do if k:sub(1,1) ~= ":" then client:send(k .. ": " .. v .. "\r\n") end end
+                                client:send("\r\n"); return true
+                            end,
+                            write_body_from_string = function(self, d) client:send(d); return true end,
+                            get_body_as_string = function() return body end,
+                            close = function() client:close() end,
+                            shutdown = function() client:close() end
+                        }
+                        xpcall(function() options.onstream(nil, stream) end, function(err)
+                            print("Request Error: " .. tostring(err))
+                            client:close()
+                        end)
+                    else client:close() end
+                else client:close() end
+            end
+        end
+    }
+end
+
+return M

@@ -1,0 +1,194 @@
+.Dd March 3, 2026
+.Dt RIO 1
+.Os
+.Sh NAME
+.Nm rio
+.Nd Lua web framework with MVC architecture and RESTful API support
+.Sh SYNOPSIS
+.Nm
+.Ar command
+.Op Ar options
+.Op Ar arguments
+.Sh DESCRIPTION
+The
+.Nm
+framework is a high-productivity web framework for Lua.
+It follows the Model-View-Controller (MVC) pattern and provides advanced tools
+for security, persistence, and automation via its command-line interface.
+.Pp
+This manual covers the CLI commands, the Active Record ORM, security features,
+template engine (ETL), and the caching system.
+.Sh COMMANDS
+.Bl -tag -width "initializers"
+.It Cm new Ar name Op Fl -database=DB Op Fl -api
+Creates a new Rio application structure.
+The
+.Fl -api
+option disables view rendering and configures the app for JSON responses only.
+.It Cm server Op Fl p Ar port Op Fl b Ar binding Op Fl e Ar environment Op Fl d
+Starts the Rio web server.
+Options:
+.Bl -tag -width "-e, --environment=ENV"
+.It Fl p, Fl -port= Ar PORT
+Set the port (default: 8080).
+.It Fl b, Fl -binding= Ar IP
+Set the IP address (default: 0.0.0.0).
+.It Fl e, Fl -environment= Ar ENV
+Set the environment (development, test, production).
+.It Fl d, Fl -daemon
+Run the server in the background as a daemon.
+.El
+.It Cm console Op Fl s
+Opens a REPL (interactive console) with the application environment loaded.
+The
+.Fl s, Fl -sandbox
+option rolls back any database changes upon exiting.
+.It Cm runner Op Fl e Ar environment Op Fl -skip-executor Ar code|file
+Executes Lua code or a file within the context of the Rio application.
+.It Cm routes Op Fl c Ar controller Op Fl g Ar pattern Op Fl E
+Lists all defined routes, URI patterns, and handlers.
+.It Cm test
+Executes the application's test suite using Busted.
+.It Cm about
+Displays system information and database status.
+.It Cm stats
+Shows project statistics (LOC, methods, code-to-test ratio).
+.It Cm initializers
+Lists the order in which the application's initialization scripts are loaded.
+.El
+.Sh GENERATORS
+Generators create boilerplate code for models, controllers, and resources.
+.Bl -tag -width "generate scaffold"
+.It Cm generate scaffold Ar Name Op Ar fields
+Creates a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
+.It Cm generate model Ar Name Op Ar fields
+Creates a Model and its corresponding Migration.
+.It Cm generate migration Ar Name Op Ar fields
+Creates a new database migration file.
+.It Cm generate controller Ar Name Op Ar actions
+Creates a Controller and its corresponding Tests.
+.It Cm generate resource Ar Name Op Ar fields
+Creates a scaffold without the Views.
+.El
+.Pp
+Fields are defined as
+.Ar name:type{options} .
+Available types:
+.Ar string , text , integer , decimal , float , boolean , date , datetime , references .
+.Sh DATABASE COMMANDS
+Commands prefixed with
+.Cm db:
+manage the database schema and lifecycle.
+.Bl -tag -width "db:seed:replant"
+.It Cm db:create , db:drop
+Creates or removes the physical database.
+.It Cm db:migrate , db:rollback
+Applies or reverts schema migrations.
+.It Cm db:status , db:version
+Checks the status of migrations and the current schema version.
+.It Cm db:setup , db:reset
+Performs a full setup or reset (Create, Migrate, Seed).
+.It Cm db:prepare
+Ensures the database exists and is fully migrated.
+.It Cm db:seed , db:seed:replant
+Populates initial data (replant clears tables first).
+.It Cm db:cache:clear
+Clears database metadata and logical caches.
+.It Cm db:system:change Fl -to= Ar adapter
+Changes the database adapter in config/database.lua.
+.El
+.Sh ACTIVE RECORD ORM
+The Rio ORM manages complex relationships and database persistence.
+.Ss Relationships
+.Bl -tag -width "has_many :through"
+.It Cm has_one
+Defines a 1:1 relationship.
+.It Cm has_many
+Defines a 1:N relationship.
+.It Cm belongs_to
+Defines the owner of the relationship and foreign keys.
+.It Cm has_many :through
+Defines N:M relationships via a join table.
+.El
+.Ss Dependent Deletion
+The
+.Ar dependent = "destroy"
+option ensures that child records are deleted when the parent is removed.
+.Sh SECURITY AND AUTHENTICATION
+Rio focuses on three pillars of security: Hashing, JWT, and Data Protection.
+.Ss Password Hashing
+Uses PBKDF2 with HMAC-SHA256 via
+.Ar rio.utils.hash .
+Passwords should be encrypted in the
+.Ar before_save
+hook of the model.
+.Ss JWT Authentication
+Provides token-based authentication for APIs.
+Tokens are generated using
+.Ar auth.generate_access_token
+and verified via the
+.Ar auth.jwt
+middleware.
+.Ss Attribute Protection
+Attributes listed in
+.Ar Model.hidden
+are automatically removed when converting objects to JSON or arrays.
+.Sh TEMPLATE ENGINE (ETL)
+Embedded Template Lua (ETL) allows embedding Lua code in HTML.
+Files use the
+.Pa .etl
+extension.
+.Ss Syntax
+.Bl -tag -width "<%= expr %>"
+.It Cm <%= expr %>
+Interpolates with HTML escaping (safe).
+.It Cm <%- expr %>
+Interpolates raw HTML (unsafe).
+.It Cm <% code %>
+Executes Lua logic (loops, conditionals).
+.It Cm <%# comment %>
+Server-side comments.
+.El
+.Sh CACHE SYSTEM
+Rio provides a two-level caching system.
+.Ss Query Cache (Level 1)
+Stores identical SQL query results during the lifecycle of a single HTTP request.
+Automatically cleared after each request.
+.Ss Application Cache (Level 2)
+Persistent cache shared between requests.
+Stores:
+.Bl -tag -width "memory"
+.It Sy memory
+Fast RAM storage (volatile).
+.It Sy file
+Stored in
+.Pa tmp/cache/
+(shared between processes).
+.It Sy null
+Disables caching.
+.El
+.Sh ENVIRONMENT
+.Bl -tag -width "RIO_ENV"
+.It Ev RIO_ENV
+Defines the current environment (e.g., development, test, production).
+.El
+.Sh FILES
+.Bl -tag -width "config/routes.lua"
+.It Pa config/routes.lua
+Routing configuration.
+.It Pa config/database.lua
+Database settings.
+.It Pa app/models/
+Application models.
+.It Pa app/controllers/
+Application controllers.
+.It Pa app/views/
+ETL templates.
+.El
+.Sh SEE ALSO
+.Xr busted 1 ,
+.Xr lua 1
+.Sh AUTHORS
+The Rio Framework Team.
+.Sh BUGS
+Report bugs at the official repository.

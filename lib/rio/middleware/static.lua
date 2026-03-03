@@ -1,0 +1,86 @@
+-- rio/lib/rio/middleware/static.lua
+-- Middleware for serving static files from a public directory.
+
+local M = {}
+
+M.description = "Serves static files from a public directory."
+
+-- Returns the content-type based on the file extension.
+local function get_content_type(file_path)
+    local ext = file_path:match("%.([^.]+)$") or ""
+    ext = ext:lower()
+    
+    local types = {
+        css = "text/css",
+        js = "application/javascript",
+        json = "application/json",
+        html = "text/html",
+        htm = "text/html",
+        png = "image/png",
+        jpg = "image/jpeg",
+        jpeg = "image/jpeg",
+        gif = "image/gif",
+        svg = "image/svg+xml",
+        ico = "image/x-icon",
+        txt = "text/plain",
+        pdf = "application/pdf",
+        woff = "font/woff",
+        woff2 = "font/woff2",
+        ttf = "font/ttf",
+        eot = "application/vnd.ms-fontobject"
+    }
+    
+    return types[ext] or "application/octet-stream"
+end
+
+-- Creates a middleware for serving static files.
+-- @param public_dir: The directory to serve files from (e.g., "public").
+function M.create(public_dir)
+    public_dir = public_dir or "public"
+    
+    return function(ctx, next)
+        -- Only serve GET and HEAD requests.
+        if ctx.method ~= "GET" and ctx.method ~= "HEAD" then
+            return next()
+        end
+        
+        -- Security: Prevent path traversal attacks.
+        if ctx.path:find("%.%.", 1, true) then
+            return next()
+        end
+        
+        local req_path = ctx.path:gsub("^/", "")
+        local file_path = public_dir .. "/" .. req_path
+        
+        -- Try to open the file in binary mode.
+        local file, err = io.open(file_path, "rb")
+        if not file then
+            return next() -- File not found, continue to next middleware.
+        end
+        
+        local content = file:read("*all")
+        file:close()
+        
+        if not content then
+            return next() -- Failed to read file content.
+        end
+        
+        -- Set response headers.
+        ctx:setHeader("Content-Type", get_content_type(file_path))
+        ctx:setHeader("Content-Length", tostring(#content))
+        ctx:setHeader("Cache-Control", "public, max-age=3600")
+        
+        -- For HEAD requests, send only headers (empty body).
+        if ctx.method == "HEAD" then
+            ctx:raw(200, "")
+        else
+            -- For GET requests, send the content.
+            ctx:raw(200, content)
+        end
+        
+        -- Stop the middleware chain as the response has been sent.
+        return false
+    end
+end
+
+return M

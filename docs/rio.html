@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    table.head, table.foot { width: 100%; }
+    td.head-rtitle, td.foot-os { text-align: right; }
+    td.head-vol { text-align: center; }
+    .Nd, .Bf, .Op { display: inline; }
+    .Pa, .Ad { font-style: italic; }
+    .Ms { font-weight: bold; }
+    .Bl-diag > dt { font-weight: bold; }
+    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;
+      font-family: inherit; }
+  </style>
+  <title>RIO(1)</title>
+</head>
+<body>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">RIO(1)</td>
+    <td class="head-vol">General Commands Manual</td>
+    <td class="head-rtitle">RIO(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp"><code class="Nm">rio</code> &#x2014; <span class="Nd">Lua web
+    framework with MVC architecture and RESTful API support</span></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<table class="Nm">
+  <tr>
+    <td><code class="Nm">rio</code></td>
+    <td><var class="Ar">command</var> [<var class="Ar">options</var>]
+      [<var class="Ar">arguments</var>]</td>
+  </tr>
+</table>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">The <code class="Nm">rio</code> framework is a high-productivity
+    web framework for Lua. It follows the Model-View-Controller (MVC) pattern
+    and provides advanced tools for security, persistence, and automation via
+    its command-line interface.</p>
+<p class="Pp">This manual covers the CLI commands, the Active Record ORM,
+    security features, template engine (ETL), and the caching system.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="COMMANDS"><a class="permalink" href="#COMMANDS">COMMANDS</a></h1>
+<dl class="Bl-tag">
+  <dt id="new"><a class="permalink" href="#new"><code class="Cm">new</code></a>
+    <var class="Ar">name</var> [<code class="Fl">--database=DB</code>
+    [<code class="Fl">--api</code>]]</dt>
+  <dd>Creates a new Rio application structure. The <code class="Fl">--api</code>
+      option disables view rendering and configures the app for JSON responses
+      only.</dd>
+  <dt id="server"><a class="permalink" href="#server"><code class="Cm">server</code></a>
+    [<code class="Fl">-p</code> <var class="Ar">port</var>
+    [<code class="Fl">-b</code> <var class="Ar">binding</var>
+    [<code class="Fl">-e</code> <var class="Ar">environment</var>
+    [<code class="Fl">-d</code>]]]]</dt>
+  <dd>Starts the Rio web server. Options:
+    <dl class="Bl-tag">
+      <dt id="p,"><a class="permalink" href="#p,"><code class="Fl">-p,</code></a>
+        <code class="Fl">--port=</code> <var class="Ar">PORT</var></dt>
+      <dd>Set the port (default: 8080).</dd>
+      <dt id="b,"><a class="permalink" href="#b,"><code class="Fl">-b,</code></a>
+        <code class="Fl">--binding=</code> <var class="Ar">IP</var></dt>
+      <dd>Set the IP address (default: 0.0.0.0).</dd>
+      <dt id="e,"><a class="permalink" href="#e,"><code class="Fl">-e,</code></a>
+        <code class="Fl">--environment=</code> <var class="Ar">ENV</var></dt>
+      <dd>Set the environment (development, test, production).</dd>
+      <dt id="d,"><a class="permalink" href="#d,"><code class="Fl">-d,</code></a>
+        <code class="Fl">--daemon</code></dt>
+      <dd>Run the server in the background as a daemon.</dd>
+    </dl>
+  </dd>
+  <dt id="console"><a class="permalink" href="#console"><code class="Cm">console</code></a>
+    [<code class="Fl">-s</code>]</dt>
+  <dd>Opens a REPL (interactive console) with the application environment
+      loaded. The <code class="Fl">-s,</code> <code class="Fl">--sandbox</code>
+      option rolls back any database changes upon exiting.</dd>
+  <dt id="runner"><a class="permalink" href="#runner"><code class="Cm">runner</code></a>
+    [<code class="Fl">-e</code> <var class="Ar">environment</var>
+    [<code class="Fl">--skip-executor</code>
+    <var class="Ar">code|file</var>]]</dt>
+  <dd>Executes Lua code or a file within the context of the Rio
+    application.</dd>
+  <dt id="routes"><a class="permalink" href="#routes"><code class="Cm">routes</code></a>
+    [<code class="Fl">-c</code> <var class="Ar">controller</var>
+    [<code class="Fl">-g</code> <var class="Ar">pattern</var>
+    [<code class="Fl">-E</code>]]]</dt>
+  <dd>Lists all defined routes, URI patterns, and handlers.</dd>
+  <dt id="test"><a class="permalink" href="#test"><code class="Cm">test</code></a></dt>
+  <dd>Executes the application's test suite using Busted.</dd>
+  <dt id="about"><a class="permalink" href="#about"><code class="Cm">about</code></a></dt>
+  <dd>Displays system information and database status.</dd>
+  <dt id="stats"><a class="permalink" href="#stats"><code class="Cm">stats</code></a></dt>
+  <dd>Shows project statistics (LOC, methods, code-to-test ratio).</dd>
+  <dt id="initializers"><a class="permalink" href="#initializers"><code class="Cm">initializers</code></a></dt>
+  <dd>Lists the order in which the application's initialization scripts are
+      loaded.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="GENERATORS"><a class="permalink" href="#GENERATORS">GENERATORS</a></h1>
+<p class="Pp">Generators create boilerplate code for models, controllers, and
+    resources.</p>
+<dl class="Bl-tag">
+  <dt id="generate"><a class="permalink" href="#generate"><code class="Cm">generate
+    scaffold</code></a> <var class="Ar">Name</var>
+    [<var class="Ar">fields</var>]</dt>
+  <dd>Creates a full CRUD (Model, Migration, Controller, Views, Tests, and
+      Routes).</dd>
+  <dt id="generate~2"><a class="permalink" href="#generate~2"><code class="Cm">generate
+    model</code></a> <var class="Ar">Name</var>
+    [<var class="Ar">fields</var>]</dt>
+  <dd>Creates a Model and its corresponding Migration.</dd>
+  <dt id="generate~3"><a class="permalink" href="#generate~3"><code class="Cm">generate
+    migration</code></a> <var class="Ar">Name</var>
+    [<var class="Ar">fields</var>]</dt>
+  <dd>Creates a new database migration file.</dd>
+  <dt id="generate~4"><a class="permalink" href="#generate~4"><code class="Cm">generate
+    controller</code></a> <var class="Ar">Name</var>
+    [<var class="Ar">actions</var>]</dt>
+  <dd>Creates a Controller and its corresponding Tests.</dd>
+  <dt id="generate~5"><a class="permalink" href="#generate~5"><code class="Cm">generate
+    resource</code></a> <var class="Ar">Name</var>
+    [<var class="Ar">fields</var>]</dt>
+  <dd>Creates a scaffold without the Views.</dd>
+</dl>
+<p class="Pp">Fields are defined as <var class="Ar">name:type{options}</var>.
+    Available types: <var class="Ar">string</var>, <var class="Ar">text</var>,
+    <var class="Ar">integer</var>, <var class="Ar">decimal</var>,
+    <var class="Ar">float</var>, <var class="Ar">boolean</var>,
+    <var class="Ar">date</var>, <var class="Ar">datetime</var>,
+    <var class="Ar">references</var>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DATABASE_COMMANDS"><a class="permalink" href="#DATABASE_COMMANDS">DATABASE
+  COMMANDS</a></h1>
+<p class="Pp">Commands prefixed with <code class="Cm">db:</code> manage the
+    database schema and lifecycle.</p>
+<dl class="Bl-tag">
+  <dt id="db:create"><a class="permalink" href="#db:create"><code class="Cm">db:create</code></a>,
+    <code class="Cm">db:drop</code></dt>
+  <dd>Creates or removes the physical database.</dd>
+  <dt id="db:migrate"><a class="permalink" href="#db:migrate"><code class="Cm">db:migrate</code></a>,
+    <code class="Cm">db:rollback</code></dt>
+  <dd>Applies or reverts schema migrations.</dd>
+  <dt id="db:status"><a class="permalink" href="#db:status"><code class="Cm">db:status</code></a>,
+    <code class="Cm">db:version</code></dt>
+  <dd>Checks the status of migrations and the current schema version.</dd>
+  <dt id="db:setup"><a class="permalink" href="#db:setup"><code class="Cm">db:setup</code></a>,
+    <code class="Cm">db:reset</code></dt>
+  <dd>Performs a full setup or reset (Create, Migrate, Seed).</dd>
+  <dt id="db:prepare"><a class="permalink" href="#db:prepare"><code class="Cm">db:prepare</code></a></dt>
+  <dd>Ensures the database exists and is fully migrated.</dd>
+  <dt id="db:seed"><a class="permalink" href="#db:seed"><code class="Cm">db:seed</code></a>,
+    <code class="Cm">db:seed:replant</code></dt>
+  <dd>Populates initial data (replant clears tables first).</dd>
+  <dt id="db:cache:clear"><a class="permalink" href="#db:cache:clear"><code class="Cm">db:cache:clear</code></a></dt>
+  <dd>Clears database metadata and logical caches.</dd>
+  <dt id="db:system:change"><a class="permalink" href="#db:system:change"><code class="Cm">db:system:change</code></a>
+    <code class="Fl">--to=</code> <var class="Ar">adapter</var></dt>
+  <dd>Changes the database adapter in config/database.lua.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ACTIVE_RECORD_ORM"><a class="permalink" href="#ACTIVE_RECORD_ORM">ACTIVE
+  RECORD ORM</a></h1>
+<p class="Pp">The Rio ORM manages complex relationships and database
+    persistence.</p>
+<section class="Ss">
+<h2 class="Ss" id="Relationships"><a class="permalink" href="#Relationships">Relationships</a></h2>
+<dl class="Bl-tag">
+  <dt id="has_one"><a class="permalink" href="#has_one"><code class="Cm">has_one</code></a></dt>
+  <dd>Defines a 1:1 relationship.</dd>
+  <dt id="has_many"><a class="permalink" href="#has_many"><code class="Cm">has_many</code></a></dt>
+  <dd>Defines a 1:N relationship.</dd>
+  <dt id="belongs_to"><a class="permalink" href="#belongs_to"><code class="Cm">belongs_to</code></a></dt>
+  <dd>Defines the owner of the relationship and foreign keys.</dd>
+  <dt id="has_many~2"><a class="permalink" href="#has_many~2"><code class="Cm">has_many
+    :through</code></a></dt>
+  <dd>Defines N:M relationships via a join table.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Dependent_Deletion"><a class="permalink" href="#Dependent_Deletion">Dependent
+  Deletion</a></h2>
+<p class="Pp">The <var class="Ar">dependent = destroy</var> option ensures that
+    child records are deleted when the parent is removed.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SECURITY_AND_AUTHENTICATION"><a class="permalink" href="#SECURITY_AND_AUTHENTICATION">SECURITY
+  AND AUTHENTICATION</a></h1>
+<p class="Pp">Rio focuses on three pillars of security: Hashing, JWT, and Data
+    Protection.</p>
+<section class="Ss">
+<h2 class="Ss" id="Password_Hashing"><a class="permalink" href="#Password_Hashing">Password
+  Hashing</a></h2>
+<p class="Pp">Uses PBKDF2 with HMAC-SHA256 via
+    <var class="Ar">rio.utils.hash</var>. Passwords should be encrypted in the
+    <var class="Ar">before_save</var> hook of the model.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="JWT_Authentication"><a class="permalink" href="#JWT_Authentication">JWT
+  Authentication</a></h2>
+<p class="Pp">Provides token-based authentication for APIs. Tokens are generated
+    using <var class="Ar">auth.generate_access_token</var> and verified via the
+    <var class="Ar">auth.jwt</var> middleware.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Attribute_Protection"><a class="permalink" href="#Attribute_Protection">Attribute
+  Protection</a></h2>
+<p class="Pp">Attributes listed in <var class="Ar">Model.hidden</var> are
+    automatically removed when converting objects to JSON or arrays.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="TEMPLATE_ENGINE_(ETL)"><a class="permalink" href="#TEMPLATE_ENGINE_(ETL)">TEMPLATE
+  ENGINE (ETL)</a></h1>
+<p class="Pp">Embedded Template Lua (ETL) allows embedding Lua code in HTML.
+    Files use the <span class="Pa">.etl</span> extension.</p>
+<section class="Ss">
+<h2 class="Ss" id="Syntax"><a class="permalink" href="#Syntax">Syntax</a></h2>
+<dl class="Bl-tag">
+  <dt id="__="><a class="permalink" href="#__="><code class="Cm">&lt;%= expr
+    %&gt;</code></a></dt>
+  <dd>Interpolates with HTML escaping (safe).</dd>
+  <dt id="__-"><a class="permalink" href="#__-"><code class="Cm">&lt;%- expr
+    %&gt;</code></a></dt>
+  <dd>Interpolates raw HTML (unsafe).</dd>
+  <dt id="__"><a class="permalink" href="#__"><code class="Cm">&lt;% code
+    %&gt;</code></a></dt>
+  <dd>Executes Lua logic (loops, conditionals).</dd>
+  <dt id="___"><a class="permalink" href="#___"><code class="Cm">&lt;%# comment
+    %&gt;</code></a></dt>
+  <dd>Server-side comments.</dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CACHE_SYSTEM"><a class="permalink" href="#CACHE_SYSTEM">CACHE
+  SYSTEM</a></h1>
+<p class="Pp">Rio provides a two-level caching system.</p>
+<section class="Ss">
+<h2 class="Ss" id="Query_Cache_(Level_1)"><a class="permalink" href="#Query_Cache_(Level_1)">Query
+  Cache (Level 1)</a></h2>
+<p class="Pp">Stores identical SQL query results during the lifecycle of a
+    single HTTP request. Automatically cleared after each request.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Application_Cache_(Level_2)"><a class="permalink" href="#Application_Cache_(Level_2)">Application
+  Cache (Level 2)</a></h2>
+<p class="Pp">Persistent cache shared between requests. Stores:</p>
+<dl class="Bl-tag">
+  <dt id="memory"><a class="permalink" href="#memory"><b class="Sy">memory</b></a></dt>
+  <dd>Fast RAM storage (volatile).</dd>
+  <dt id="file"><a class="permalink" href="#file"><b class="Sy">file</b></a></dt>
+  <dd>Stored in <span class="Pa">tmp/cache/</span> (shared between
+    processes).</dd>
+  <dt id="null"><a class="permalink" href="#null"><b class="Sy">null</b></a></dt>
+  <dd>Disables caching.</dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ENVIRONMENT"><a class="permalink" href="#ENVIRONMENT">ENVIRONMENT</a></h1>
+<dl class="Bl-tag">
+  <dt id="RIO_ENV"><a class="permalink" href="#RIO_ENV"><code class="Ev">RIO_ENV</code></a></dt>
+  <dd>Defines the current environment (e.g., development, test,
+    production).</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="FILES"><a class="permalink" href="#FILES">FILES</a></h1>
+<dl class="Bl-tag">
+  <dt><span class="Pa">config/routes.lua</span></dt>
+  <dd>Routing configuration.</dd>
+  <dt><span class="Pa">config/database.lua</span></dt>
+  <dd>Database settings.</dd>
+  <dt><span class="Pa">app/models/</span></dt>
+  <dd>Application models.</dd>
+  <dt><span class="Pa">app/controllers/</span></dt>
+  <dd>Application controllers.</dd>
+  <dt><span class="Pa">app/views/</span></dt>
+  <dd>ETL templates.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp"><a class="Xr">busted(1)</a>, <a class="Xr">lua(1)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHORS"><a class="permalink" href="#AUTHORS">AUTHORS</a></h1>
+<p class="Pp">The Rio Framework Team.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BUGS"><a class="permalink" href="#BUGS">BUGS</a></h1>
+<p class="Pp">Report bugs at the official repository.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">March 3, 2026</td>
+    <td class="foot-os">Linux 6.18.13-arch1-1</td>
+  </tr>
+</table>
+</body>
+</html>

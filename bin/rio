@@ -1,0 +1,31 @@
+#!/usr/bin/env lua
+
+-- rio/bin/rio
+--
+-- Main command-line interface for the Rio framework.
+
+-- Get the absolute directory of the currently executing script
+local script_path = debug.getinfo(1, "S").source:sub(2)
+local handle = io.popen("realpath " .. script_path)
+local absolute_script_path = handle:read("*l")
+handle:close()
+
+local script_dir = absolute_script_path:match("(.*/)") or "./"
+-- In a typical installation, the bin/ is a sibling of lib/
+-- In development, it's rio/bin and rio/lib
+local rio_framework_lib_path = script_dir .. "../lib/?.lua;" .. script_dir .. "../lib/?/init.lua"
+
+-- Prepend the framework's lib directory to LUA_PATH for cli module itself
+package.path = rio_framework_lib_path .. ";" .. package.path
+
+local cli = require("rio.cli")
+local status, err = pcall(cli.run, arg, rio_framework_lib_path, absolute_script_path) -- Pass the framework's lib path and bin path
+
+if not status then
+    if err and type(err) == "string" and (err:find("interrupted!") or err:find("interrupt")) then
+        print("\n" .. (cli.colors and cli.colors.yellow or "") .. "Interrupted. Exiting..." .. (cli.colors and cli.colors.reset or ""))
+        os.exit(130) -- Standard exit code for SIGINT
+    else
+        error(err)
+    end
+end
