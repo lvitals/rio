@@ -25,7 +25,9 @@ Creates a new Rio application structure.
 The
 .Fl -api
 option disables view rendering and configures the app for JSON responses only.
-.It Cm server Op Fl p Ar port Op Fl b Ar binding Op Fl e Ar environment Op Fl d
+Supported databases:
+.Ar postgresql , mysql , sqlite3 , none .
+.It Cm server Op Fl p Ar port Op Fl b Ar binding Op Fl e Ar environment Op Fl d Op Fl -pid=FILE
 Starts the Rio web server.
 Options:
 .Bl -tag -width "-e, --environment=ENV"
@@ -37,38 +39,76 @@ Set the IP address (default: 0.0.0.0).
 Set the environment (development, test, production).
 .It Fl d, Fl -daemon
 Run the server in the background as a daemon.
+.It Fl -pid= Ar FILE
+Specify the PID file for daemon mode (default: tmp/pids/server.pid).
 .El
-.It Cm console Op Fl s
-Opens a REPL (interactive console) with the application environment loaded.
-The
-.Fl s, Fl -sandbox
-option rolls back any database changes upon exiting.
+.It Cm console Op Fl e Ar environment Op Fl s
+Opens an interactive Rio console (REPL) with the application environment loaded.
+All models are automatically loaded into the global scope.
+Options:
+.Bl -tag -width "-e, --environment=ENV"
+.It Fl e, Fl -environment= Ar ENV
+Set the environment (default: development).
+.It Fl s, Fl -sandbox
+Rollback any database changes upon exiting.
+.El
+.Pp
+Available objects in console:
+.Ar app
+(application instance),
+.Ar db
+(database helpers),
+.Ar helper
+(view utilities),
+.Ar reload
+(reload project modules),
+.Ar pp
+(pretty-print),
+.Ar history
+(command history),
+.Ar clear
+(clear screen).
 .It Cm runner Op Fl e Ar environment Op Fl -skip-executor Ar code|file
 Executes Lua code or a file within the context of the Rio application.
+The
+.Fl -skip-executor
+option skips loading models and connecting to the database.
 .It Cm routes Op Fl c Ar controller Op Fl g Ar pattern Op Fl E
 Lists all defined routes, URI patterns, and handlers.
-.It Cm test
+Options:
+.Bl -tag -width "-c, --controller=NAME"
+.It Fl c, Fl -controller= Ar NAME
+Filter routes by controller name.
+.It Fl g, Fl -grep= Ar PATTERN
+Filter routes by matching pattern in verb, URI, or controller.
+.It Fl E, Fl -expanded
+Display detailed information in expanded format.
+.El
+.It Cm test Op Ar args
 Executes the application's test suite using Busted.
+Additional arguments are passed directly to Busted.
 .It Cm about
-Displays system information and database status.
+Displays system information, versions, and database status.
 .It Cm stats
-Shows project statistics (LOC, methods, code-to-test ratio).
+Shows project statistics (LOC, methods, Modules, and code-to-test ratio).
 .It Cm initializers
 Lists the order in which the application's initialization scripts are loaded.
+.It Cm help Op Ar command Op Ar subcommand
+Displays help for a command or a specific subcommand.
 .El
-.Sh GENERATORS
-Generators create boilerplate code for models, controllers, and resources.
+.Sh GENERATORS AND DESTRUCTORS
+Generators create boilerplate code, while destructors remove it.
 .Bl -tag -width "generate scaffold"
-.It Cm generate scaffold Ar Name Op Ar fields
-Creates a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
-.It Cm generate model Ar Name Op Ar fields
-Creates a Model and its corresponding Migration.
-.It Cm generate migration Ar Name Op Ar fields
-Creates a new database migration file.
-.It Cm generate controller Ar Name Op Ar actions
-Creates a Controller and its corresponding Tests.
-.It Cm generate resource Ar Name Op Ar fields
-Creates a scaffold without the Views.
+.It Cm generate | destroy scaffold Ar Name Op Ar fields
+Creates or removes a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
+.It Cm generate | destroy model Ar Name Op Ar fields
+Creates or removes a Model and its corresponding Migration.
+.It Cm generate | destroy migration Ar Name Op Ar fields
+Creates or removes a database migration file.
+.It Cm generate | destroy controller Ar Name Op Ar actions
+Creates or removes a Controller and its corresponding Tests.
+.It Cm generate | destroy resource Ar Name Op Ar fields
+Creates or removes a scaffold without the Views.
 .El
 .Pp
 Fields are defined as
@@ -96,6 +136,29 @@ Populates initial data (replant clears tables first).
 Clears database metadata and logical caches.
 .It Cm db:system:change Fl -to= Ar adapter
 Changes the database adapter in config/database.lua.
+.El
+.Sh MAINTENANCE AND MAILBOX
+.Bl -tag -width "mailbox:ingress:provider"
+.It Cm tmp:create
+Creates temporary directories for cache, sockets, and pids.
+.It Cm tmp:clear
+Clears all cache, sockets, and screenshot files.
+.It Cm tmp:cache:clear , tmp:sockets:clear , tmp:screenshots:clear , tmp:pids:clear
+Clears specific temporary directories.
+.It Cm middleware
+Lists active and available middlewares.
+.It Cm middleware:create Ar name
+Generates a new custom middleware file in app/middleware/.
+.It Cm middleware:use Ar name
+Enables a middleware in config/middlewares.lua.
+.It Cm middleware:unuse Ar name
+Disables a middleware in config/middlewares.lua.
+.It Cm middleware:rm Ar name
+Deletes a local middleware file and disables it.
+.It Cm mailbox:install
+Sets up the Mailbox system (folders, base class, and migrations).
+.It Cm mailbox:ingress: Ar provider
+Relay an inbound email from a provider (postfix, exim, qmail) to Rio.
 .El
 .Sh ACTIVE RECORD ORM
 The Rio ORM manages complex relationships and database persistence.

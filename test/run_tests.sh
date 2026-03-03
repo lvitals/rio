@@ -3,6 +3,11 @@
 # run_tests.sh
 # Automates dependency installation and test execution across multiple Lua versions.
 
+# Ensure we're in the project root relative to the script's location
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT" || exit 1
+
 LUA_VERSIONS=("5.4" "5.3" "5.2" "5.1")
 ROCKSPEC="rio-0.1.0-1.rockspec"
 

@@ -15,6 +15,7 @@ pids/
 .luarocks/
 luarocks/
 vendor/
+*.rock
 
 # Env files
 .env

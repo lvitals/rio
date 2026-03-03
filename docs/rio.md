@@ -30,8 +30,10 @@ template engine (ETL), and the caching system.
 > The
 > **--api**
 > option disables view rendering and configures the app for JSON responses only.
+> Supported databases:
+> *postgresql*, *mysql*, *sqlite3*, *none*.
 
-**server** \[**-p** *port* \[**-b** *binding* \[**-e** *environment* \[**-d**]]]]
+**server** \[**-p** *port* \[**-b** *binding* \[**-e** *environment* \[**-d** \[**--pid=FILE**]]]]]
 
 > Starts the Rio web server.
 > Options:
@@ -52,60 +54,108 @@ template engine (ETL), and the caching system.
 
 > > Run the server in the background as a daemon.
 
-**console** \[**-s**]
+> **--pid=** *FILE*
 
-> Opens a REPL (interactive console) with the application environment loaded.
-> The
+> > Specify the PID file for daemon mode (default: tmp/pids/server.pid).
+
+**console** \[**-e** *environment* \[**-s**]]
+
+> Opens an interactive Rio console (REPL) with the application environment loaded.
+> All models are automatically loaded into the global scope.
+> Options:
+
+> **-e,** **--environment=** *ENV*
+
+> > Set the environment (default: development).
+
 > **-s,** **--sandbox**
-> option rolls back any database changes upon exiting.
+
+> > Rollback any database changes upon exiting.
+
+> Available objects in console:
+> *app*
+> (application instance),
+> *db*
+> (database helpers),
+> *helper*
+> (view utilities),
+> *reload*
+> (reload project modules),
+> *pp*
+> (pretty-print),
+> *history*
+> (command history),
+> *clear*
+> (clear screen).
 
 **runner** \[**-e** *environment* \[**--skip-executor** *code|file*]]
 
 > Executes Lua code or a file within the context of the Rio application.
+> The
+> **--skip-executor**
+> option skips loading models and connecting to the database.
 
 **routes** \[**-c** *controller* \[**-g** *pattern* \[**-E**]]]
 
 > Lists all defined routes, URI patterns, and handlers.
+> Options:
 
-**test**
+> **-c,** **--controller=** *NAME*
+
+> > Filter routes by controller name.
+
+> **-g,** **--grep=** *PATTERN*
+
+> > Filter routes by matching pattern in verb, URI, or controller.
+
+> **-E,** **--expanded**
+
+> > Display detailed information in expanded format.
+
+**test** \[*args*]
 
 > Executes the application's test suite using Busted.
+> Additional arguments are passed directly to Busted.
 
 **about**
 
-> Displays system information and database status.
+> Displays system information, versions, and database status.
 
 **stats**
 
-> Shows project statistics (LOC, methods, code-to-test ratio).
+> Shows project statistics (LOC, methods, Modules, and code-to-test ratio).
 
 **initializers**
 
 > Lists the order in which the application's initialization scripts are loaded.
 
-# GENERATORS
+**help** \[*command* \[*subcommand*]]
 
-Generators create boilerplate code for models, controllers, and resources.
+> Displays help for a command or a specific subcommand.
 
-**generate scaffold** *Name* \[*fields*]
+# GENERATORS AND DESTRUCTORS
 
-> Creates a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
+Generators create boilerplate code, while destructors remove it.
 
-**generate model** *Name* \[*fields*]
+**generate** | **destroy scaffold** *Name* \[*fields*]
 
-> Creates a Model and its corresponding Migration.
+> Creates or removes a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
 
-**generate migration** *Name* \[*fields*]
+**generate** | **destroy model** *Name* \[*fields*]
 
-> Creates a new database migration file.
+> Creates or removes a Model and its corresponding Migration.
 
-**generate controller** *Name* \[*actions*]
+**generate** | **destroy migration** *Name* \[*fields*]
 
-> Creates a Controller and its corresponding Tests.
+> Creates or removes a database migration file.
 
-**generate resource** *Name* \[*fields*]
+**generate** | **destroy controller** *Name* \[*actions*]
 
-> Creates a scaffold without the Views.
+> Creates or removes a Controller and its corresponding Tests.
+
+**generate** | **destroy resource** *Name* \[*fields*]
+
+> Creates or removes a scaffold without the Views.
 
 Fields are defined as
 *name:type{options}*.
@@ -149,6 +199,48 @@ manage the database schema and lifecycle.
 **db:system:change** **--to=** *adapter*
 
 > Changes the database adapter in config/database.lua.
+
+# MAINTENANCE AND MAILBOX
+
+**tmp:create**
+
+> Creates temporary directories for cache, sockets, and pids.
+
+**tmp:clear**
+
+> Clears all cache, sockets, and screenshot files.
+
+**tmp:cache:clear**, **tmp:sockets:clear**, **tmp:screenshots:clear**, **tmp:pids:clear**
+
+> Clears specific temporary directories.
+
+**middleware**
+
+> Lists active and available middlewares.
+
+**middleware:create** *name*
+
+> Generates a new custom middleware file in app/middleware/.
+
+**middleware:use** *name*
+
+> Enables a middleware in config/middlewares.lua.
+
+**middleware:unuse** *name*
+
+> Disables a middleware in config/middlewares.lua.
+
+**middleware:rm** *name*
+
+> Deletes a local middleware file and disables it.
+
+**mailbox:install**
+
+> Sets up the Mailbox system (folders, base class, and migrations).
+
+**mailbox:ingress:** *provider*
+
+> Relay an inbound email from a provider (postfix, exim, qmail) to Rio.
 
 # ACTIVE RECORD ORM
 

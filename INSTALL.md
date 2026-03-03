@@ -20,6 +20,12 @@ sudo apt-get update
 sudo apt-get install lua5.4 luarocks build-essential libsqlite3-dev libmysqlclient-dev libpq-dev
 ```
 
+### On Arch Linux:
+```bash
+sudo pacman -Syu
+sudo pacman -S lua luarocks base-devel sqlite mariadb-libs postgresql-libs
+```
+
 ## Install Rio Framework
 
 You can install Rio via LuaRocks. For development purposes, it's recommended to install it locally.
@@ -72,16 +78,6 @@ luarocks install luasql-mysql MYSQL_INCDIR=/usr/include/mysql MYSQL_LIBDIR=/usr/
 ```bash
 luarocks install luasql-postgres --local
 ```
-
-## Testing Your Setup
-
-To run the framework's internal test suite across all supported Lua versions, you can use the provided script:
-
-```bash
-./run_tests.sh
-```
-
-This script will attempt to install dependencies and execute the full test matrix (Lua 5.1 to 5.4).
 
 ## Creating Your First Project
 

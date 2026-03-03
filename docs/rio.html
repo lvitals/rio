@@ -57,12 +57,14 @@
     [<code class="Fl">--api</code>]]</dt>
   <dd>Creates a new Rio application structure. The <code class="Fl">--api</code>
       option disables view rendering and configures the app for JSON responses
-      only.</dd>
+      only. Supported databases: <var class="Ar">postgresql</var>,
+      <var class="Ar">mysql</var>, <var class="Ar">sqlite3</var>,
+      <var class="Ar">none</var>.</dd>
   <dt id="server"><a class="permalink" href="#server"><code class="Cm">server</code></a>
     [<code class="Fl">-p</code> <var class="Ar">port</var>
     [<code class="Fl">-b</code> <var class="Ar">binding</var>
     [<code class="Fl">-e</code> <var class="Ar">environment</var>
-    [<code class="Fl">-d</code>]]]]</dt>
+    [<code class="Fl">-d</code> [<code class="Fl">--pid=FILE</code>]]]]]</dt>
   <dd>Starts the Rio web server. Options:
     <dl class="Bl-tag">
       <dt id="p,"><a class="permalink" href="#p,"><code class="Fl">-p,</code></a>
@@ -77,61 +79,110 @@
       <dt id="d,"><a class="permalink" href="#d,"><code class="Fl">-d,</code></a>
         <code class="Fl">--daemon</code></dt>
       <dd>Run the server in the background as a daemon.</dd>
+      <dt id="pid="><a class="permalink" href="#pid="><code class="Fl">--pid=</code></a>
+        <var class="Ar">FILE</var></dt>
+      <dd>Specify the PID file for daemon mode (default:
+        tmp/pids/server.pid).</dd>
     </dl>
   </dd>
   <dt id="console"><a class="permalink" href="#console"><code class="Cm">console</code></a>
-    [<code class="Fl">-s</code>]</dt>
-  <dd>Opens a REPL (interactive console) with the application environment
-      loaded. The <code class="Fl">-s,</code> <code class="Fl">--sandbox</code>
-      option rolls back any database changes upon exiting.</dd>
+    [<code class="Fl">-e</code> <var class="Ar">environment</var>
+    [<code class="Fl">-s</code>]]</dt>
+  <dd>Opens an interactive Rio console (REPL) with the application environment
+      loaded. All models are automatically loaded into the global scope.
+      Options:
+    <dl class="Bl-tag">
+      <dt id="e,~2"><a class="permalink" href="#e,~2"><code class="Fl">-e,</code></a>
+        <code class="Fl">--environment=</code> <var class="Ar">ENV</var></dt>
+      <dd>Set the environment (default: development).</dd>
+      <dt id="s,"><a class="permalink" href="#s,"><code class="Fl">-s,</code></a>
+        <code class="Fl">--sandbox</code></dt>
+      <dd>Rollback any database changes upon exiting.</dd>
+    </dl>
+    <p class="Pp">Available objects in console: <var class="Ar">app</var>
+        (application instance), <var class="Ar">db</var> (database helpers),
+        <var class="Ar">helper</var> (view utilities),
+        <var class="Ar">reload</var> (reload project modules),
+        <var class="Ar">pp</var> (pretty-print), <var class="Ar">history</var>
+        (command history), <var class="Ar">clear</var> (clear screen).</p>
+  </dd>
   <dt id="runner"><a class="permalink" href="#runner"><code class="Cm">runner</code></a>
     [<code class="Fl">-e</code> <var class="Ar">environment</var>
     [<code class="Fl">--skip-executor</code>
     <var class="Ar">code|file</var>]]</dt>
-  <dd>Executes Lua code or a file within the context of the Rio
-    application.</dd>
+  <dd>Executes Lua code or a file within the context of the Rio application. The
+      <code class="Fl">--skip-executor</code> option skips loading models and
+      connecting to the database.</dd>
   <dt id="routes"><a class="permalink" href="#routes"><code class="Cm">routes</code></a>
     [<code class="Fl">-c</code> <var class="Ar">controller</var>
     [<code class="Fl">-g</code> <var class="Ar">pattern</var>
     [<code class="Fl">-E</code>]]]</dt>
-  <dd>Lists all defined routes, URI patterns, and handlers.</dd>
-  <dt id="test"><a class="permalink" href="#test"><code class="Cm">test</code></a></dt>
-  <dd>Executes the application's test suite using Busted.</dd>
+  <dd>Lists all defined routes, URI patterns, and handlers. Options:
+    <dl class="Bl-tag">
+      <dt id="c,"><a class="permalink" href="#c,"><code class="Fl">-c,</code></a>
+        <code class="Fl">--controller=</code> <var class="Ar">NAME</var></dt>
+      <dd>Filter routes by controller name.</dd>
+      <dt id="g,"><a class="permalink" href="#g,"><code class="Fl">-g,</code></a>
+        <code class="Fl">--grep=</code> <var class="Ar">PATTERN</var></dt>
+      <dd>Filter routes by matching pattern in verb, URI, or controller.</dd>
+      <dt id="E,"><a class="permalink" href="#E,"><code class="Fl">-E,</code></a>
+        <code class="Fl">--expanded</code></dt>
+      <dd>Display detailed information in expanded format.</dd>
+    </dl>
+  </dd>
+  <dt id="test"><a class="permalink" href="#test"><code class="Cm">test</code></a>
+    [<var class="Ar">args</var>]</dt>
+  <dd>Executes the application's test suite using Busted. Additional arguments
+      are passed directly to Busted.</dd>
   <dt id="about"><a class="permalink" href="#about"><code class="Cm">about</code></a></dt>
-  <dd>Displays system information and database status.</dd>
+  <dd>Displays system information, versions, and database status.</dd>
   <dt id="stats"><a class="permalink" href="#stats"><code class="Cm">stats</code></a></dt>
-  <dd>Shows project statistics (LOC, methods, code-to-test ratio).</dd>
+  <dd>Shows project statistics (LOC, methods, Modules, and code-to-test
+    ratio).</dd>
   <dt id="initializers"><a class="permalink" href="#initializers"><code class="Cm">initializers</code></a></dt>
   <dd>Lists the order in which the application's initialization scripts are
       loaded.</dd>
+  <dt id="help"><a class="permalink" href="#help"><code class="Cm">help</code></a>
+    [<var class="Ar">command</var> [<var class="Ar">subcommand</var>]]</dt>
+  <dd>Displays help for a command or a specific subcommand.</dd>
 </dl>
 </section>
 <section class="Sh">
-<h1 class="Sh" id="GENERATORS"><a class="permalink" href="#GENERATORS">GENERATORS</a></h1>
-<p class="Pp">Generators create boilerplate code for models, controllers, and
-    resources.</p>
+<h1 class="Sh" id="GENERATORS_AND_DESTRUCTORS"><a class="permalink" href="#GENERATORS_AND_DESTRUCTORS">GENERATORS
+  AND DESTRUCTORS</a></h1>
+<p class="Pp">Generators create boilerplate code, while destructors remove
+  it.</p>
 <dl class="Bl-tag">
-  <dt id="generate"><a class="permalink" href="#generate"><code class="Cm">generate
+  <dt id="generate"><a class="permalink" href="#generate"><code class="Cm">generate</code></a>
+    | <a class="permalink" href="#destroy"><code class="Cm" id="destroy">destroy
     scaffold</code></a> <var class="Ar">Name</var>
     [<var class="Ar">fields</var>]</dt>
-  <dd>Creates a full CRUD (Model, Migration, Controller, Views, Tests, and
-      Routes).</dd>
-  <dt id="generate~2"><a class="permalink" href="#generate~2"><code class="Cm">generate
+  <dd>Creates or removes a full CRUD (Model, Migration, Controller, Views,
+      Tests, and Routes).</dd>
+  <dt id="generate~2"><a class="permalink" href="#generate~2"><code class="Cm">generate</code></a>
+    |
+    <a class="permalink" href="#destroy~2"><code class="Cm" id="destroy~2">destroy
     model</code></a> <var class="Ar">Name</var>
     [<var class="Ar">fields</var>]</dt>
-  <dd>Creates a Model and its corresponding Migration.</dd>
-  <dt id="generate~3"><a class="permalink" href="#generate~3"><code class="Cm">generate
+  <dd>Creates or removes a Model and its corresponding Migration.</dd>
+  <dt id="generate~3"><a class="permalink" href="#generate~3"><code class="Cm">generate</code></a>
+    |
+    <a class="permalink" href="#destroy~3"><code class="Cm" id="destroy~3">destroy
     migration</code></a> <var class="Ar">Name</var>
     [<var class="Ar">fields</var>]</dt>
-  <dd>Creates a new database migration file.</dd>
-  <dt id="generate~4"><a class="permalink" href="#generate~4"><code class="Cm">generate
+  <dd>Creates or removes a database migration file.</dd>
+  <dt id="generate~4"><a class="permalink" href="#generate~4"><code class="Cm">generate</code></a>
+    |
+    <a class="permalink" href="#destroy~4"><code class="Cm" id="destroy~4">destroy
     controller</code></a> <var class="Ar">Name</var>
     [<var class="Ar">actions</var>]</dt>
-  <dd>Creates a Controller and its corresponding Tests.</dd>
-  <dt id="generate~5"><a class="permalink" href="#generate~5"><code class="Cm">generate
+  <dd>Creates or removes a Controller and its corresponding Tests.</dd>
+  <dt id="generate~5"><a class="permalink" href="#generate~5"><code class="Cm">generate</code></a>
+    |
+    <a class="permalink" href="#destroy~5"><code class="Cm" id="destroy~5">destroy
     resource</code></a> <var class="Ar">Name</var>
     [<var class="Ar">fields</var>]</dt>
-  <dd>Creates a scaffold without the Views.</dd>
+  <dd>Creates or removes a scaffold without the Views.</dd>
 </dl>
 <p class="Pp">Fields are defined as <var class="Ar">name:type{options}</var>.
     Available types: <var class="Ar">string</var>, <var class="Ar">text</var>,
@@ -168,6 +219,40 @@
   <dt id="db:system:change"><a class="permalink" href="#db:system:change"><code class="Cm">db:system:change</code></a>
     <code class="Fl">--to=</code> <var class="Ar">adapter</var></dt>
   <dd>Changes the database adapter in config/database.lua.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="MAINTENANCE_AND_MAILBOX"><a class="permalink" href="#MAINTENANCE_AND_MAILBOX">MAINTENANCE
+  AND MAILBOX</a></h1>
+<dl class="Bl-tag">
+  <dt id="tmp:create"><a class="permalink" href="#tmp:create"><code class="Cm">tmp:create</code></a></dt>
+  <dd>Creates temporary directories for cache, sockets, and pids.</dd>
+  <dt id="tmp:clear"><a class="permalink" href="#tmp:clear"><code class="Cm">tmp:clear</code></a></dt>
+  <dd>Clears all cache, sockets, and screenshot files.</dd>
+  <dt id="tmp:cache:clear"><a class="permalink" href="#tmp:cache:clear"><code class="Cm">tmp:cache:clear</code></a>,
+    <code class="Cm">tmp:sockets:clear</code>,
+    <code class="Cm">tmp:screenshots:clear</code>,
+    <code class="Cm">tmp:pids:clear</code></dt>
+  <dd>Clears specific temporary directories.</dd>
+  <dt id="middleware"><a class="permalink" href="#middleware"><code class="Cm">middleware</code></a></dt>
+  <dd>Lists active and available middlewares.</dd>
+  <dt id="middleware:create"><a class="permalink" href="#middleware:create"><code class="Cm">middleware:create</code></a>
+    <var class="Ar">name</var></dt>
+  <dd>Generates a new custom middleware file in app/middleware/.</dd>
+  <dt id="middleware:use"><a class="permalink" href="#middleware:use"><code class="Cm">middleware:use</code></a>
+    <var class="Ar">name</var></dt>
+  <dd>Enables a middleware in config/middlewares.lua.</dd>
+  <dt id="middleware:unuse"><a class="permalink" href="#middleware:unuse"><code class="Cm">middleware:unuse</code></a>
+    <var class="Ar">name</var></dt>
+  <dd>Disables a middleware in config/middlewares.lua.</dd>
+  <dt id="middleware:rm"><a class="permalink" href="#middleware:rm"><code class="Cm">middleware:rm</code></a>
+    <var class="Ar">name</var></dt>
+  <dd>Deletes a local middleware file and disables it.</dd>
+  <dt id="mailbox:install"><a class="permalink" href="#mailbox:install"><code class="Cm">mailbox:install</code></a></dt>
+  <dd>Sets up the Mailbox system (folders, base class, and migrations).</dd>
+  <dt id="mailbox:ingress:"><a class="permalink" href="#mailbox:ingress:"><code class="Cm">mailbox:ingress:</code></a>
+    <var class="Ar">provider</var></dt>
+  <dd>Relay an inbound email from a provider (postfix, exim, qmail) to Rio.</dd>
 </dl>
 </section>
 <section class="Sh">
