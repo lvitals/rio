@@ -1,8 +1,10 @@
 package = "rio"
-version = "0.1.0-1"
+version = "0.1.1-1"
 source = {
-   url = "git://github.com/lvitals/rio"
+   url = "git://github.com/lvitals/rio",
+   tag = "v0.1.1"
 }
+
 description = {
    summary = "Lua web framework with MVC architecture and RESTful API support",
    homepage = "https://github.com/lvitals/rio",
