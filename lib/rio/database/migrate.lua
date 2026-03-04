@@ -295,6 +295,9 @@ end
 local BaseMigration = {}
 BaseMigration.__index = BaseMigration
 
+function BaseMigration:up() end
+function BaseMigration:down() end
+
 function BaseMigration:extend()
     local cls = setmetatable({}, self)
     cls.__index = cls

@@ -69,9 +69,15 @@ end
 function M.is_safe(path)
     if type(path) ~= "string" then return false end
     -- Rejects path traversal attempts
-    if path:find("%.%.", 1, true) then return false end
-    -- Rejects null bytes
-    if path:find("\0") then return false end
+    if path:find("..", 1, true) then return false end
+    -- Rejects null bytes manually for full compatibility (Lua 5.1+)
+    local i = 1
+    while true do
+        local b = path:byte(i)
+        if not b then break end
+        if b == 0 then return false end
+        i = i + 1
+    end
     return true
 end
 
@@ -83,6 +89,10 @@ function M.normalize(path)
     -- Ensures it starts with /
     if path:sub(1, 1) ~= "/" then
         path = "/" .. path
+    end
+    -- Remove trailing slash (unless it's just root)
+    if path ~= "/" and path:sub(-1) == "/" then
+        path = path:sub(1, -2)
     end
     return path
 end

@@ -34,9 +34,11 @@ local function get_content_type(file_path)
 end
 
 -- Creates a middleware for serving static files.
--- @param public_dir: The directory to serve files from (e.g., "public").
-function M.create(public_dir)
-    public_dir = public_dir or "public"
+-- @param options: The directory string or options table {root="public"}.
+function M.create(app, options)
+    local public_dir = "public"
+    if type(options) == "string" then public_dir = options
+    elseif type(options) == "table" then public_dir = options.root or "public" end
     
     return function(ctx, next)
         -- Only serve GET and HEAD requests.
@@ -45,8 +47,8 @@ function M.create(public_dir)
         end
         
         -- Security: Prevent path traversal attacks.
-        if ctx.path:find("%.%.", 1, true) then
-            return next()
+        if ctx.path:find("..", 1, true) then
+            return ctx:error(403, "Forbidden")
         end
         
         local req_path = ctx.path:gsub("^/", "")
