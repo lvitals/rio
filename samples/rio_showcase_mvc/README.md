@@ -49,6 +49,21 @@ rio server
 ```
 Visit `http://localhost:8080` in your browser.
 
+## Docker & OpenResty
+
+This project includes a Docker configuration to run with OpenResty as a reverse proxy.
+
+### 1. Start the Containers
+```bash
+docker-compose up --build
+```
+
+### 2. Access the MVC App
+- **Web Portal:** `http://localhost:8081`
+- **Health Status:** `http://localhost:8081/status`
+
+The containers persist your SQLite database in the `./db` directory.
+
 ## Credentials
 
 The system comes pre-seeded with an administrator account:

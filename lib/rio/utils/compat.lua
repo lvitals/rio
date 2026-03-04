@@ -17,6 +17,7 @@ function M.get_lua_bin()
     -- If the binary name looks like a complex path or contains suspicious characters
     -- (like code from a wrapper), we fallback to a version-specific binary name.
     if bin:find("[%(%);]") or #bin > 256 then
+        if jit and jit.version then return "luajit" end
         local ver = _VERSION:match("Lua (%d%.%d)")
         if ver then return "lua" .. ver end
         return "lua"
@@ -138,24 +139,42 @@ M.band, M.bor, M.bxor, M.bnot, M.lshift, M.rshift = bit.band, bit.bor, bit.bxor,
 
 -- Path and environment compatibility
 function M.get_runtime_paths(framework_lib_path)
-    local cmd = "luarocks path --local"
-    if M.lua_version then
-        cmd = "luarocks --lua-version=" .. M.lua_version .. " path --local"
+    local lp = os.getenv("LUA_PATH") or ""
+    local lcp = os.getenv("LUA_CPATH") or ""
+
+    -- If LUA_PATH already seems to have LuaRocks or system paths, don't call luarocks
+    if lp ~= "" and (lp:find("share/lua") or lp:find("luarocks")) then
+        return (framework_lib_path or "") .. ";" .. lp, lcp
     end
 
-    local handle = io.popen(cmd, "r")
-    local output = handle:read("*a")
-    handle:close()
-
-    local lp = output:match("LUA_PATH='([^']+)'") or ""
-    local lcp = output:match("LUA_CPATH='([^']+)'") or ""
-
-    local final_lp = (framework_lib_path or "") .. ";" .. lp .. ";" .. (os.getenv("LUA_PATH") or "")
-    local final_lcp = lcp .. ";" .. (os.getenv("LUA_CPATH") or "")
+    -- Try with --local first, but fallback to system-wide if it fails (common in Docker/root)
+    local base_cmd = "luarocks path"
+    if M.lua_version then
+        base_cmd = "luarocks --lua-version=" .. M.lua_version .. " path"
+    end
     
-    if M.lua_version == 5.1 then
-        local home = os.getenv("HOME") or "/home/leandro"
-        final_lcp = home .. "/.luarocks/lib/lua/5.1/socket/?.so;" .. home .. "/.luarocks/lib/lua/5.1/mime/?.so;" .. final_lcp
+    local cmd = base_cmd .. " --local 2>/dev/null || " .. base_cmd .. " 2>/dev/null"
+
+    local handle = io.popen(cmd, "r")
+    local output = ""
+    if handle then
+        output = handle:read("*a")
+        handle:close()
+    end
+
+    local lp_rocks = output:match("LUA_PATH=['\"]([^'\"]+)['\"]") or ""
+    local lcp_rocks = output:match("LUA_CPATH=['\"]([^'\"]+)['\"]") or ""
+
+    local final_lp = (framework_lib_path or "") .. ";" .. (lp_rocks ~= "" and lp_rocks or lp)
+    local final_lcp = (lcp_rocks ~= "" and lcp_rocks or lcp)
+    
+    -- For Lua 5.1, we only append user-tree paths if HOME is explicitly set
+    local home = os.getenv("HOME")
+    if M.lua_version == 5.1 and home then
+        local user_51_extra = home .. "/.luarocks/lib/lua/5.1/socket/?.so;" .. home .. "/.luarocks/lib/lua/5.1/mime/?.so;"
+        if not final_lcp:find(user_51_extra, 1, true) then
+            final_lcp = user_51_extra .. final_lcp
+        end
     end
 
     return final_lp, final_lcp

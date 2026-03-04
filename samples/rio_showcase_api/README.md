@@ -45,6 +45,22 @@ rio server
 ```
 The API will be available at `http://localhost:8080`.
 
+## Docker & OpenResty
+
+You can run this application using Docker and OpenResty as a high-performance reverse proxy.
+
+### 1. Start the Stack
+From this directory, run:
+```bash
+docker-compose up --build
+```
+
+### 2. Access the Application
+- **API Gateway (OpenResty):** `http://localhost:8080`
+- **Health Check:** `http://localhost:8080/status`
+
+The Docker setup automatically handles database migrations and environment configuration.
+
 ## API Documentation
 
 Rio automatically generates interactive documentation. Once the server is running, visit:

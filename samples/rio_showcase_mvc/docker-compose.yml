@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  mvc_app:
+    build:
+      context: ../../
+      dockerfile: samples/rio_showcase_mvc/Dockerfile
+    environment:
+      - RIO_ENV=development
+    volumes:
+      - ./db:/app/db
+      - ./tmp:/app/tmp
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+
+  gateway:
+    image: openresty/openresty:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+    depends_on:
+      - mvc_app
+    restart: unless-stopped
