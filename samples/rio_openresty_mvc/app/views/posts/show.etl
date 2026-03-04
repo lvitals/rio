@@ -1,0 +1,13 @@
+<% if notice then %><div style="color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; padding: 12px; border-radius: 4px; margin-bottom: 20px;"><%= notice %></div><% end %>
+<% if alert then %><div style="color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 12px; border-radius: 4px; margin-bottom: 20px;"><%= alert %></div><% end %>
+
+<h1>Post</h1>
+<p style="font-size: 1.1em; margin-bottom: 10px;"><strong style="color: #495057;">Title:</strong> <%= post.title %></p>
+<p style="font-size: 1.1em; margin-bottom: 10px;"><strong style="color: #495057;">Body:</strong> <%= post.body %></p>
+<p style="font-size: 1.1em; margin-bottom: 10px;"><strong style="color: #495057;">Published:</strong> <%= post.published %></p>
+<p style="font-size: 1.1em; margin-bottom: 10px;"><strong style="color: #495057;">Price:</strong> <%= post.price %></p>
+<p style="font-size: 1.1em; margin-bottom: 10px;"><strong style="color: #495057;">Priority:</strong> <%= post.priority %></p>
+<div style="margin-top: 20px;">
+  <a href="/posts/<%= post.id %>/edit">Edit</a> |
+  <a href="/posts">Back to posts</a>
+</div>

@@ -1,0 +1,3 @@
+-- bootstrap.lua
+-- Initializes the Rio environment and loads configurations.
+-- This file is typically required by app.lua.
