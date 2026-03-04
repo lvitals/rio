@@ -10,6 +10,7 @@ return {
     api_only = true,
     title = "Rio Showcase API",
     api_version = "v1",
+    api_versions = { "v1", "v2" },
     
     -- Cache Configuration
     query_cache = true, -- Level 1: Request-level SQL cache

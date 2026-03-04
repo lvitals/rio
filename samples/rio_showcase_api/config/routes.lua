@@ -6,7 +6,7 @@ local auth_mw = require("rio.auth")
 
 return function(app)
     -- Public routes
-    app:get("/", function(ctx) Home:index(ctx) end)
+    app:get("/", "Home@index")
     
     -- Format: "ControllerName@actionName" enables auto-documentation
     app:post("/auth/login", "Auth@login")
@@ -14,18 +14,30 @@ return function(app)
     -- Protected API Group
     local authenticate = auth_mw.jwt({ secret = "rio-showcase-secret" })
 
-    -- Identity (Root-level protected)
-    app:get("/me", app:wrap("Auth@me", authenticate))
-
-    app:group("/api", function(api)
-        api:use(authenticate)
+    -- API V1
+    app:group("/api/v1", function(v1)
+        v1:use(authenticate)
         
-        -- Statistics (Demonstrates Cache)
-        api:get("/stats", "Stats@index")
+        -- Identity
+        v1:get("/me", "Auth@me")
+        
+        -- Statistics
+        v1:get("/stats", "Stats@index")
         
         -- CRUDs
-        api:resources("users")
-        api:resources("projects")
-        api:resources("labels")
+        v1:resources("users")
+        v1:resources("projects")
+        v1:resources("labels")
+    end)
+
+    -- API V2 (Example)
+    app:group("/api/v2", function(v2)
+        v2:use(authenticate)
+        
+        -- Identity (V2 might return more data or different format)
+        v2:get("/me", "Auth@me")
+        
+        -- CRUDs
+        v2:resources("projects")
     end)
 end
