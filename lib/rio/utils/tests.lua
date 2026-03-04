@@ -447,6 +447,8 @@ function tests.setup()
         local Migrate = require("rio.database.migrate").Migrate
         
         Manager.verbose = false -- Silence DB logs during testing
+        Manager.query_cache_enabled = false -- Force disable for all tests
+        Manager.clear_query_cache()
         Manager.initialize(db_configs.test)
         
         -- Run migrations automatically before tests
