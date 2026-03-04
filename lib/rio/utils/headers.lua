@@ -43,6 +43,13 @@ function M.set_security_headers(headers, config)
     -- Default is very strict, but can be extended via config.csp
     local csp = config.csp or "default-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'self'"
     headers:upsert("Content-Security-Policy", csp)
+
+    -- Custom Headers from configuration
+    if config.headers and type(config.headers) == "table" then
+        for k, v in pairs(config.headers) do
+            headers:upsert(k, tostring(v))
+        end
+    end
 end
 
 return M

@@ -18,5 +18,14 @@ return {
     cache_store = "file", -- Persist cache in tmp/cache/
     
     version = "1.0.0",
-    api_format = "json"
+    api_format = "json",
+
+    -- Security & Headers Configuration
+    -- security = {
+    --     headers = {
+    --         ["X-API-Version"] = "1.0",
+    --         ["X-Framework"] = "Rio",
+    --         ["X-Custom-Token"] = "enabled"
+    --     }
+    -- }
 }

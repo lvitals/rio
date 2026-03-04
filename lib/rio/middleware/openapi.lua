@@ -49,7 +49,8 @@ function M.create(app, options)
                 securitySchemes = {
                     bearerAuth = { type = "http", scheme = "bearer", jwtFormat = "JWT" }
                 }
-            }
+            },
+            security = { { bearerAuth = {} } }
         }
 
         local tags_found = {}
@@ -130,10 +131,31 @@ function M.create(app, options)
                                 responses = {
                                     ["200"] = { 
                                         description = "Success",
-                                        content = available_formats
+                                        content = available_formats,
+                                        headers = {}
                                     }
                                 }
                             }
+
+                            -- Inject custom headers from app config as INPUT parameters (Request Headers)
+                            if app.config.security and app.config.security.headers then
+                                for h_name, h_value in pairs(app.config.security.headers) do
+                                    -- Add to request parameters so Swagger UI shows an input field
+                                    table.insert(operation.parameters, {
+                                        name = h_name,
+                                        ["in"] = "header",
+                                        required = false,
+                                        description = "Custom application header",
+                                        schema = { type = "string", default = tostring(h_value) }
+                                    })
+
+                                    -- Also keep in response documentation
+                                    operation.responses["200"].headers[h_name] = {
+                                        description = "Response header",
+                                        schema = { type = "string", example = tostring(h_value) }
+                                    }
+                                end
+                            end
 
                             -- Default Request Body for POST/PUT/PATCH
                             if (method_lower == "post" or method_lower == "put" or method_lower == "patch") then
@@ -154,6 +176,22 @@ function M.create(app, options)
                                     for _, p in ipairs(custom_meta.parameters) do table.insert(operation.parameters, p) end
                                 end
                                 if custom_meta.tags then operation.tags = custom_meta.tags end
+
+                                -- Inject Route-Specific Headers from controller metadata
+                                if custom_meta.headers then
+                                    for h_name, h_desc in pairs(custom_meta.headers) do
+                                        local description = type(h_desc) == "string" and h_desc or "Route-specific header"
+                                        
+                                        -- Add to request parameters
+                                        table.insert(operation.parameters, {
+                                            name = h_name,
+                                            ["in"] = "header",
+                                            required = true,
+                                            description = description,
+                                            schema = { type = "string" }
+                                        })
+                                    end
+                                end
                             end
 
                             spec.paths[path][method_lower] = operation

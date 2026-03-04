@@ -4,6 +4,16 @@ local Label = require("app.models.label")
 
 local StatsController = {}
 
+-- Definition MUST be outside the function for OpenAPI reflection to work
+-- StatsController.openapi = {
+--     index = {
+--         summary = "Get System Stats",
+--         headers = {
+--             ["X-API-Key"] = "Chave de acesso restrita para estatísticas"
+--         }
+--     }
+-- }
+
 function StatsController:index(ctx)
     -- This calculation is cached for 600 seconds (10 minutes)
     -- Using the Application Cache (Level 2)
