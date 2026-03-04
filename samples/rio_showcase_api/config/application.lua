@@ -9,6 +9,7 @@ return {
     environment = env,
     api_only = true,
     title = "Rio Showcase API",
+    api_version = "v1",
     
     -- Cache Configuration
     query_cache = true, -- Level 1: Request-level SQL cache

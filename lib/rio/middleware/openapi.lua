@@ -39,7 +39,7 @@ function M.create(app, options)
             openapi = "3.1.0",
             info = {
                 title = app.config.title or app.config.app_name or "Rio Auto-API",
-                version = app.config.version or app.config.app_version or "1.0.0",
+                version = app.config.api_version or app.config.version or "1.0.0",
                 description = app.config.description or "Auto-generated documentation via route reflection."
             },
             paths = {},
@@ -62,14 +62,39 @@ function M.create(app, options)
                         local path = rio_to_openapi_path(route.path)
                         spec.paths[path] = spec.paths[path] or {}
                         
-                        -- Grouping by the first path segment
+                        -- REFRECTION: Extract METADATA from Controller (_openapi)
+                        local custom_meta = nil
+                        local controller_name = nil
+                        if app.routes_meta and app.routes_meta[route.handler] then
+                            local meta = app.routes_meta[route.handler]
+                            controller_name = meta.controller
+                            local action_name = meta.action
+
+                            -- Attempt to load controller to find openapi table
+                            local controller_module = controller_name:lower()
+                            if not controller_module:find("_controller$") then
+                                controller_module = controller_module .. "_controller"
+                            end
+
+                            local ok, controller = pcall(require, "app.controllers." .. controller_module)
+                            if ok and type(controller) == "table" and controller.openapi then
+                                custom_meta = controller.openapi[action_name]
+                            end
+                        end
+
+                        -- Grouping: Prefer Controller name, fallback to path segment
                         local tag = "default"
-                        local first_segment = route.path:match("/([^/:]+)")
-                        if first_segment then tag = first_segment end
+                        if controller_name then
+                            tag = controller_name:lower():gsub("_?controller$", ""):gsub("^app%.controllers%.", "")
+                        else
+                            local first_segment = route.path:match("/([^/:]+)")
+                            if first_segment then tag = first_segment:lower() end
+                        end
+                        
                         tags_found[tag] = true
 
                         local operation = {
-                            summary = method:upper() .. " " .. path,
+                            summary = custom_meta and custom_meta.summary or (method:upper() .. " " .. path),
                             tags = { tag },
                             parameters = get_path_params(route.path),
                             security = { { bearerAuth = {} } },
@@ -81,43 +106,32 @@ function M.create(app, options)
                             }
                         }
 
-                        if method_lower == "post" or method_lower == "put" or method_lower == "patch" then
-                            operation.requestBody = {
-                                required = true,
-                                content = available_formats
-                            }
+                        if custom_meta then
+                            if custom_meta.description then operation.description = custom_meta.description end
+                            
+                            -- Map snake_case 'request_body' to OpenAPI' 'requestBody'
+                            if custom_meta.request_body then
+                                operation.requestBody = custom_meta.request_body
+                            elseif custom_meta.requestBody then
+                                operation.requestBody = custom_meta.requestBody
+                            end
+                            
+                            if custom_meta.responses then operation.responses = custom_meta.responses end
+                            if custom_meta.parameters then 
+                                -- Merge parameters if they already exist from path
+                                for _, p in ipairs(custom_meta.parameters) do
+                                    table.insert(operation.parameters, p)
+                                end
+                            end
+                            if custom_meta.tags then operation.tags = custom_meta.tags end
                         end
 
-                        -- REFRECTION: Extract METADATA from Controller (_openapi)
-                        if app.routes_meta and app.routes_meta[route.handler] then
-                            local meta = app.routes_meta[route.handler]
-                            local controller_name = meta.controller
-                            local action_name = meta.action
-
-                            -- Attempt to load controller to find openapi table
-                            local controller_module = controller_name:lower()
-                            if not controller_module:find("_controller$") then
-                                controller_module = controller_module .. "_controller"
-                            end
-
-                            local ok, controller = pcall(require, "app.controllers." .. controller_module)
-                            if ok and type(controller) == "table" and controller.openapi then
-                                local custom_meta = controller.openapi[action_name]
-                                if custom_meta then
-                                    if custom_meta.summary then operation.summary = custom_meta.summary end
-                                    if custom_meta.description then operation.description = custom_meta.description end
-                                    
-                                    -- Map snake_case 'request_body' to OpenAPI' 'requestBody'
-                                    if custom_meta.request_body then
-                                        operation.requestBody = custom_meta.request_body
-                                    elseif custom_meta.requestBody then
-                                        operation.requestBody = custom_meta.requestBody
-                                    end
-                                    
-                                    if custom_meta.responses then operation.responses = custom_meta.responses end
-                                    if custom_meta.parameters then operation.parameters = custom_meta.parameters end
-                                    if custom_meta.tags then operation.tags = custom_meta.tags end
-                                end
+                        if method_lower == "post" or method_lower == "put" or method_lower == "patch" then
+                            if not operation.requestBody then
+                                operation.requestBody = {
+                                    required = true,
+                                    content = available_formats
+                                }
                             end
                         end
 

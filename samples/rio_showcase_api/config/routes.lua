@@ -14,11 +14,11 @@ return function(app)
     -- Protected API Group
     local authenticate = auth_mw.jwt({ secret = "rio-showcase-secret" })
 
+    -- Identity (Root-level protected)
+    app:get("/me", app:wrap("Auth@me", authenticate))
+
     app:group("/api", function(api)
         api:use(authenticate)
-        
-        -- Identity
-        api:get("/me", "Auth@me")
         
         -- Statistics (Demonstrates Cache)
         api:get("/stats", "Stats@index")
