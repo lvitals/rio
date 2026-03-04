@@ -28,7 +28,7 @@ function M.create(app, options)
     local docs_path = options.path or app.config.openapi_path or "/docs"
     local json_path = options.json_path or app.config.openapi_json_path or "/openapi.json"
     
-    -- Restored: Support for both standard JSON and JSON:API
+    -- Support for both standard JSON and JSON:API
     local available_formats = {
         ["application/json"] = { schema = { type = "object" } },
         ["application/vnd.api+json"] = { schema = { type = "object" } }
@@ -67,9 +67,7 @@ function M.create(app, options)
                         -- Normalize version prefix to have leading slash
                         local vp = version_prefix:sub(1,1) == "/" and version_prefix or ("/" .. version_prefix)
                         
-                        -- A route matches versioning if:
-                        -- 1. It is explicitly part of the version (e.g. /api/v1/...)
-                        -- 2. It is a "global" route (not starting with /api/vX/ or /vX/)
+                        -- A route matches versioning if it is explicitly part of the version or is a global route
                         local is_versioned = route.path:find("^/v%d+/") or 
                                             route.path:find("^/api/v%d+/") or
                                             route.path:match("^/v%d+$") or
@@ -81,21 +79,22 @@ function M.create(app, options)
                                              route.path:find("^/api" .. vp .. "/") or
                                              route.path == ("/api" .. vp)
                         else
-                            -- Global routes (like /auth/login or /) are included in all version specs
-                            matches_version = true
+                            matches_version = true -- Global routes are included in all specs
                         end
                     end
 
                     if not is_docs and matches_version then
                         local path = rio_to_openapi_path(route.path)
                         
-                        -- REFRECTION: Extract METADATA from Controller (_openapi)
+                        -- REFLECTION: Extract METADATA from Controller (_openapi)
                         local custom_meta = nil
                         local controller_name = nil
+                        local action_name = nil
+
                         if app.routes_meta and app.routes_meta[route.handler] then
                             local meta = app.routes_meta[route.handler]
                             controller_name = meta.controller
-                            local action_name = meta.action
+                            action_name = meta.action
 
                             -- Attempt to load controller to find openapi table
                             local controller_module = controller_name:lower()
@@ -110,12 +109,10 @@ function M.create(app, options)
                         end
 
                         -- SKIP if hidden = true
-                        if custom_meta and custom_meta.hidden then
-                            -- Skip this route
-                        else
+                        if not (custom_meta and custom_meta.hidden) then
                             spec.paths[path] = spec.paths[path] or {}
                             
-                            -- Grouping: Prefer Controller name, fallback to path segment
+                            -- Grouping: Prefer Controller name
                             local tag = "default"
                             if controller_name then
                                 tag = controller_name:lower():gsub("_?controller$", ""):gsub("^app%.controllers%.", "")
@@ -123,11 +120,10 @@ function M.create(app, options)
                                 local first_segment = route.path:match("/([^/:]+)")
                                 if first_segment then tag = first_segment:lower() end
                             end
-                            
                             tags_found[tag] = true
 
                             local operation = {
-                                summary = custom_meta and custom_meta.summary or (method:upper() .. " " .. path),
+                                summary = (custom_meta and custom_meta.summary) or (method:upper() .. " " .. path),
                                 tags = { tag },
                                 parameters = get_path_params(route.path),
                                 security = { { bearerAuth = {} } },
@@ -139,33 +135,25 @@ function M.create(app, options)
                                 }
                             }
 
-                            if custom_meta then
-                                if custom_meta.description then operation.description = custom_meta.description end
-                                
-                                -- Map snake_case 'request_body' to OpenAPI' 'requestBody'
-                                if custom_meta.request_body then
-                                    operation.requestBody = custom_meta.request_body
-                                elseif custom_meta.requestBody then
-                                    operation.requestBody = custom_meta.requestBody
-                                end
-                                
-                                if custom_meta.responses then operation.responses = custom_meta.responses end
-                                if custom_meta.parameters then 
-                                    -- Merge parameters if they already exist from path
-                                    for _, p in ipairs(custom_meta.parameters) do
-                                        table.insert(operation.parameters, p)
-                                    end
-                                end
-                                if custom_meta.tags then operation.tags = custom_meta.tags end
+                            -- Default Request Body for POST/PUT/PATCH
+                            if (method_lower == "post" or method_lower == "put" or method_lower == "patch") then
+                                operation.requestBody = {
+                                    required = true,
+                                    content = available_formats
+                                }
                             end
 
-                            if method_lower == "post" or method_lower == "put" or method_lower == "patch" then
-                                if not operation.requestBody then
-                                    operation.requestBody = {
-                                        required = true,
-                                        content = available_formats
-                                    }
+                            -- OVERRIDE with Custom Metadata if present
+                            if custom_meta then
+                                if custom_meta.summary then operation.summary = custom_meta.summary end
+                                if custom_meta.description then operation.description = custom_meta.description end
+                                if custom_meta.responses then operation.responses = custom_meta.responses end
+                                if custom_meta.request_body then operation.requestBody = custom_meta.request_body
+                                elseif custom_meta.requestBody then operation.requestBody = custom_meta.requestBody end
+                                if custom_meta.parameters then 
+                                    for _, p in ipairs(custom_meta.parameters) do table.insert(operation.parameters, p) end
                                 end
+                                if custom_meta.tags then operation.tags = custom_meta.tags end
                             end
 
                             spec.paths[path][method_lower] = operation
@@ -178,9 +166,7 @@ function M.create(app, options)
         local sorted_tags = {}
         for t in pairs(tags_found) do table.insert(sorted_tags, t) end
         table.sort(sorted_tags)
-        for _, t in ipairs(sorted_tags) do
-            table.insert(spec.tags, { name = t })
-        end
+        for _, t in ipairs(sorted_tags) do table.insert(spec.tags, { name = t }) end
 
         return spec
     end
@@ -188,8 +174,7 @@ function M.create(app, options)
     return function(ctx, next_mw)
         if ctx.path == json_path then
             local version_prefix = ctx.query.v
-            local spec = build_spec(version_prefix)
-            return ctx:json(spec)
+            return ctx:json(build_spec(version_prefix))
         end
         
         if ctx.path == docs_path then
@@ -216,7 +201,7 @@ function M.create(app, options)
   <title>]] .. (app.config.title or "Rio API Documentation") .. [[</title>
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
   <style>
-    html { box-sizing: border-box; overflow: -moz-scrollbars-vertical; overflow-y: scroll; }
+    html { box-sizing: border-box; overflow-y: scroll; }
     *, *:before, *:after { box-sizing: inherit; }
     body { margin:0; background: #fafafa; }
   </style>
@@ -232,9 +217,7 @@ function M.create(app, options)
         dom_id: '#swagger-ui',
         deepLinking: true,
         presets: ]] .. presets .. [[,
-        plugins: [
-          SwaggerUIBundle.plugins.DownloadUrl
-        ],
+        plugins: [SwaggerUIBundle.plugins.DownloadUrl],
         layout: "]] .. layout .. [[",
         tagsSorter: "alpha",
         operationsSorter: "alpha"

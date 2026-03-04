@@ -18,17 +18,26 @@ local function send_answer(stream, headers, body)
         headers:upsert(":status", "200")
     end
 
-    local ok, err = stream:write_headers(headers, false)
+    -- end_stream should be true if there is no body
+    local end_stream = (body == nil or body == "")
+    local ok, err = stream:write_headers(headers, end_stream)
+    
     if not ok then
-        -- We can't send an error response if headers failed, so we just log.
-        print("Error writing headers: " .. tostring(err))
+        -- Silence Broken pipe errors which are common when clients disconnect early
+        local err_str = tostring(err)
+        if not (err_str:find("Broken pipe") or err_str:find("connection reset")) then
+            io.stderr:write("Error writing headers: " .. err_str .. "\n")
+        end
         return
     end
 
-    if body then
+    if not end_stream then
         ok, err = stream:write_body_from_string(body)
         if not ok then
-            print("Error writing body: " .. tostring(err))
+            local err_str = tostring(err)
+            if not (err_str:find("Broken pipe") or err_str:find("connection reset")) then
+                io.stderr:write("Error writing body: " .. err_str .. "\n")
+            end
         end
     end
 end
