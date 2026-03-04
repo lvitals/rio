@@ -26,12 +26,12 @@
 
     <div style="margin-bottom: 15px;">
         <label style="display: block; font-weight: bold;">Password</label>
-        <input type="password" name="password" style="width: 100%; padding: 8px;" <%= (not target_user.id) and "required" or "" %>>
+        <input type="password" name="password" style="width: 100%; padding: 8px;" <%= (not target_user._exists) and "required" or "" %>>
     </div>
 
     <div style="margin-bottom: 15px;">
         <label style="display: block; font-weight: bold;">Confirm Password</label>
-        <input type="password" name="password_confirmation" style="width: 100%; padding: 8px;" <%= (not target_user.id) and "required" or "" %>>
+        <input type="password" name="password_confirmation" style="width: 100%; padding: 8px;" <%= (not target_user._exists) and "required" or "" %>>
     </div>
 
     <div style="margin-bottom: 15px;">

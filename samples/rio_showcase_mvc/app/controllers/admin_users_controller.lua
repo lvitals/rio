@@ -48,6 +48,7 @@ function AdminUsersController:update(ctx)
     -- Only update password if provided
     if not data.password or data.password == "" then 
         data.password = nil 
+        data.password_confirmation = nil
     else
         -- Pass confirmation for custom validation in model
         u.password_confirmation = data.password_confirmation
