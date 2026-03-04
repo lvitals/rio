@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  standalone_app:
+    build:
+      context: ../../
+      dockerfile: samples/rio_standalone/Dockerfile
+    # Use host network to bypass Podman bridge issues
+    network_mode: "host"
+    environment:
+      - RIO_ENV=development
+    init: true
+    restart: unless-stopped
+
+  gateway:
+    image: openresty/openresty:alpine
+    # Also use host network
+    network_mode: "host"
+    volumes:
+      - ./nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+    depends_on:
+      - standalone_app
+    restart: unless-stopped

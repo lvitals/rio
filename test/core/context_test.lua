@@ -6,7 +6,7 @@ describe("Rio Context", function()
     local mock_stream
 
     before_each(function()
-        local headers = {
+        local headers_obj = {
             get = function(self, k)
                 if k == ":path" then return "/users/123?sort=desc" end
                 if k == ":method" then return "GET" end
@@ -14,10 +14,14 @@ describe("Rio Context", function()
             end,
             each = function() return function() return nil end end
         }
-        mock_stream = {
-            get_headers = function() return headers end
+        mock_adapter = {
+            method = "GET",
+            path = "/users/123",
+            query = { sort = "desc" },
+            headers = {},
+            get_headers = function() return headers_obj end
         }
-        ctx = Context.new(mock_stream)
+        ctx = Context.new(mock_adapter)
         ctx.params = { id = "123" } -- Injected by router in real life
     end)
 
