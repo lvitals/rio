@@ -938,7 +938,7 @@ local function generate_scaffold_views(resource_name, fields)
     end
     table.insert(edit_content, "  <button type=\"submit\" style=\"background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 1em; cursor: pointer;\">Update " .. camel_case(singular_name) .. "</button>")
     table.insert(edit_content, "</form>")
-    table.insert(edit_content, "<br><div style=\"margin-top: 10px;\"><a href=\"/" .. plural_name .. "/<%= " .. singular_name .. ".id %>\">Show</a> |",
+    table.insert(edit_content, "<br><div style=\"margin-top: 10px;\"><a href=\"/" .. plural_name .. "/<%= " .. singular_name .. ".id %>\">Show</a> | " ..
     "<a href=\"/" .. plural_name .. "\">Back to " .. plural_name .. "</a></div>")
     write_file_content(views_dir .. "/edit.etl", table.concat(edit_content, "\n"))
 
