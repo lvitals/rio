@@ -179,7 +179,7 @@ function M.create(app, options)
         
         if ctx.path == docs_path then
             local urls_json = ""
-            local layout = "BaseLayout"
+            local ui_layout = "BaseLayout"
             local presets = "[SwaggerUIBundle.presets.apis]"
 
             if app.config.api_versions and #app.config.api_versions > 0 then
@@ -188,16 +188,20 @@ function M.create(app, options)
                     table.insert(urls, string.format('{url: "%s?v=%s", name: "%s"}', json_path, v, v:upper()))
                 end
                 urls_json = "urls: [" .. table.concat(urls, ", ") .. "],"
-                layout = "StandaloneLayout"
+                ui_layout = "StandaloneLayout"
                 presets = "[SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset]"
             else
                 urls_json = 'url: "' .. json_path .. '",'
             end
 
+            -- Set specific CSP for Swagger UI to allow necessary CDNs
+            ctx:setHeader("Content-Security-Policy", "default-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://unpkg.com; frame-ancestors 'self'")
+
             return ctx:html([[
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>]] .. (app.config.title or "Rio API Documentation") .. [[</title>
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
   <style>
@@ -218,7 +222,7 @@ function M.create(app, options)
         deepLinking: true,
         presets: ]] .. presets .. [[,
         plugins: [SwaggerUIBundle.plugins.DownloadUrl],
-        layout: "]] .. layout .. [[",
+        layout: "]] .. ui_layout .. [[",
         tagsSorter: "alpha",
         operationsSorter: "alpha"
       });

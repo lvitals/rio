@@ -200,16 +200,19 @@ end
 
 -- Executes an insert query and returns the last inserted ID.
 function M.insert(sql, bindings)
+    M.clear_query_cache()
     return wrap_adapter_call("insert", sql, bindings)
 end
 
 -- Executes an update query and returns the number of affected rows.
 function M.update(sql, bindings)
+    M.clear_query_cache()
     return wrap_adapter_call("update", sql, bindings)
 end
 
 -- Executes a delete query and returns the number of affected rows.
 function M.delete(sql, bindings)
+    M.clear_query_cache()
     return wrap_adapter_call("delete", sql, bindings)
 end
 

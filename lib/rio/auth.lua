@@ -35,8 +35,25 @@ function M.bearer(validator)
     end
 end
 
--- Middleware for Basic HTTP Authentication.
+-- Middleware for HTTP Basic Authentication.
 function M.basic(validator)
+    local options = {}
+    if type(validator) == "table" then
+        options = validator
+        validator = options.validator
+
+        -- If users dictionary is provided, create a default validator
+        if not validator and options.users then
+            validator = function(user, pass)
+                local expected_pass = options.users[user]
+                if expected_pass and expected_pass == pass then
+                    return true, { username = user }
+                end
+                return false, "Invalid username or password"
+            end
+        end
+    end
+
     if type(validator) ~= "function" then
         error("validator must be a function")
     end
@@ -79,6 +96,22 @@ end
 
 -- Middleware for API Key authentication in a custom header.
 function M.api_key(header_name, validator)
+    local options = {}
+    if type(header_name) == "table" then
+        options = header_name
+        header_name = options.header or "x-api-key"
+        validator = options.validator
+        
+        -- If keys dictionary is provided, create a default validator
+        if not validator and options.keys then
+            validator = function(key)
+                local identity = options.keys[key]
+                if identity then return true, identity end
+                return false, "Invalid API key"
+            end
+        end
+    end
+
     header_name = header_name or "x-api-key"
     
     if type(validator) ~= "function" then

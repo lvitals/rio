@@ -358,6 +358,20 @@ do
       if env == nil then
         env = { }
       end
+      
+      -- Add 'render' helper for partials
+      if env.render == nil then
+        env.render = function(view_path, data)
+          -- Inherit parent environment for convenience (Metatable magic)
+          local partial_data = setmetatable(data or {}, { __index = env })
+          
+          local etl = require("rio.utils.etl")
+          local content, err = etl.render_file("app/views/" .. view_path .. ".etl", partial_data)
+          if not content then return "Template Error: " .. tostring(err) end
+          return content
+        end
+      end
+
       local combined_env = setmetatable({ }, {
         __index = function(self, name)
           local val = env[name]

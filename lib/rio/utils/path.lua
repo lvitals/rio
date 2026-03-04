@@ -53,13 +53,8 @@ function M.compile(template)
 
         if name then
             table.insert(names, name)
-            if is_last then
-                -- Last param is optional: accepts "/user" and "/user/123"
-                table.insert(parts, "/?([^/]*)")
-            else
-                -- Intermediate params are mandatory
-                table.insert(parts, "/([^/]+)")
-            end
+            -- All params are mandatory for now
+            table.insert(parts, "/([^/]+)")
         else
             -- Literal (escapes pattern metacharacters)
             table.insert(parts, "/" .. escape_lua_pattern(seg))

@@ -17,9 +17,19 @@ function Server.new(config)
     local perform_caching = config.perform_caching ~= false
     
     local adapter, options
-    if not perform_caching then adapter = "null"; options = {}
-    elseif type(cache_store) == "table" then adapter = cache_store[1]; options = cache_store[2] or {}
-    else adapter = cache_store; options = {} end
+    if not perform_caching then 
+        adapter = "null"
+        options = {}
+    elseif type(cache_store) == "table" then 
+        adapter = cache_store[1]
+        options = cache_store[2] or {}
+    else 
+        adapter = cache_store
+        options = { 
+            dir = config.cache_dir,
+            namespace = config.app_name 
+        } 
+    end
     
     return setmetatable({
         router = router_lib.new(),
@@ -105,7 +115,11 @@ function Server:_to_handler(handler)
         local controller_name, action_name = handler:match("^(.*)@(.*)$")
         if controller_name and action_name then
             local simple_handler = function(ctx)
-                local controller = require("app.controllers." .. controller_name:lower())
+                local module_name = controller_name:lower()
+                if not module_name:find("_controller$") then
+                    module_name = module_name .. "_controller"
+                end
+                local controller = require("app.controllers." .. module_name)
                 return controller[action_name](controller, ctx)
             end
             
@@ -230,6 +244,10 @@ end
 
 -- Core Request Processing (Generic)
 function Server:_process_request(adapter)
+    -- Clear query cache at the start of each request
+    local db_manager = require("rio.database.manager")
+    db_manager.clear_query_cache()
+
     local ctx = context_lib.new(adapter, self.config)
     ctx.app = self
 
@@ -254,6 +272,19 @@ function Server:_process_request(adapter)
     end
 
     context_lib.set_body(ctx, adapter:get_body())
+
+    -- Method Override Support (for browsers/forms)
+    if ctx.method == "POST" and ctx.body and ctx.body._method then
+        local overriden_method = tostring(ctx.body._method):upper()
+        if overriden_method == "PUT" or overriden_method == "PATCH" or overriden_method == "DELETE" then
+            ctx.method = overriden_method
+        end
+    elseif ctx.method == "POST" and ctx.query and ctx.query._method then
+        local overriden_method = tostring(ctx.query._method):upper()
+        if overriden_method == "PUT" or overriden_method == "PATCH" or overriden_method == "DELETE" then
+            ctx.method = overriden_method
+        end
+    end
 
     local ok, result = pcall(run_handler)
     if not ok then

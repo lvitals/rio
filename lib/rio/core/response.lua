@@ -52,13 +52,43 @@ local function build_headers(status, content_type, headers_obj)
     return h
 end
 
+-- Recursively converts objects (like Rio Models) to plain tables for JSON serialization
+local function prepare_for_json(obj)
+    if type(obj) ~= "table" then return obj end
+    
+    -- If it's a Rio Model instance, use toJSON or toTable
+    if obj.toJSON and type(obj.toJSON) == "function" then
+        obj = obj:toJSON()
+    elseif obj.toTable and type(obj.toTable) == "function" then
+        obj = obj:toTable()
+    end
+    
+    -- Recurse through the table
+    local cleaned = {}
+    for k, v in pairs(obj) do
+        if type(v) == "table" then
+            cleaned[k] = prepare_for_json(v)
+        else
+            cleaned[k] = v
+        end
+    end
+    return cleaned
+end
+
 -- Response methods
 function M.json(adapter, status, obj, headers_obj)
     local content_type = "application/json; charset=utf-8"
     local headers = build_headers(status, content_type, headers_obj)
-    local ok, encoded = pcall(json.encode, obj)
+    
+    -- Prepare object by converting models to plain tables
+    local serializable_obj = prepare_for_json(obj)
+    
+    local ok, encoded = pcall(json.encode, serializable_obj)
     local body = ok and encoded or '{"error":"json encoding error"}'
-    if not ok then headers:upsert(":status", "500") end
+    if not ok then 
+        headers:upsert(":status", "500")
+        -- print("DEBUG: JSON Encoding Error: " .. tostring(encoded))
+    end
     send_answer(adapter, headers, body)
 end
 

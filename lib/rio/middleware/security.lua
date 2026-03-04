@@ -2,15 +2,17 @@
 -- Security-related middlewares for the Rio framework.
 
 local response = require("rio.core.response")
+local headers_utils = require("rio.utils.headers")
 
 local M = {}
 
 M.description = "Enhances application security by setting essential HTTP headers."
 
 -- Adds standard security headers to every response.
-function M.headers()
+function M.headers(options)
     return function(ctx, next)
-        response.set_security_headers(ctx.response_headers)
+        local config = options or (ctx.app and ctx.app.config and ctx.app.config.security)
+        headers_utils.set_security_headers(ctx.response_headers, config)
         return next()
     end
 end

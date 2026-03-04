@@ -41,7 +41,16 @@ function M.new(adapter, config)
     ctx.req = ctx
     ctx.res = ctx
     
-    function ctx:setHeader(key, value) self.response_headers:append(key, value) end
+    function ctx:setHeader(key, value)
+        if self.response_headers.upsert then
+            self.response_headers:upsert(key, value)
+        elseif self.response_headers.set then
+            self.response_headers:set(key, value)
+        else
+            -- Fallback to append if no better method exists
+            self.response_headers:append(key, value)
+        end
+    end
 
     function ctx:setCookie(name, value, options)
         options = options or {}
@@ -89,6 +98,19 @@ function M.new(adapter, config)
     function ctx:redirect(location, status)
         self:setHeader("Location", location)
         return response.redirect(self.adapter, status or 302, self.response_headers)
+    end
+
+    function ctx:error(status, message, details, headers)
+        if headers then
+            for k, v in pairs(headers) do self:setHeader(k, v) end
+        end
+        
+        local accept = self:getHeader("accept") or ""
+        if accept:find("application/json") or self.config.api_only then
+            return self:json({ error = message, details = details }, status)
+        else
+            return self:text(message, status)
+        end
     end
 
     function ctx:getHeader(name) return self.headers[string.lower(name)] end

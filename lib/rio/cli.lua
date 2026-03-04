@@ -862,23 +862,7 @@ local function generate_scaffold_views(resource_name, fields)
     local new_content = {
         flash_block,
         "<h1>New " .. camel_case(singular_name) .. "</h1>",
-        "<%- render(\"" .. plural_name .. "/_form\", { action = \"/" .. plural_name .. "\", method = \"POST\", " .. singular_name .. " = " .. singular_name .. " }) %>",
-        "<br><a href=\"/" .. plural_name .. "\">Back to " .. plural_name .. "</a>"
-    }
-    write_file_content(views_dir .. "/new.etl", table.concat(new_content, "\n"))
-
-    -- edit.etl
-    local edit_content = {
-        flash_block,
-        "<h1>Editing " .. camel_case(singular_name) .. "</h1>",
-        "<%- render(\"" .. plural_name .. "/_form\", { action = \"/" .. plural_name .. "/\" .. " .. singular_name .. ".id, method = \"POST\", _method = \"PUT\", " .. singular_name .. " = " .. singular_name .. " }) %>",
-        "<br><div style=\"margin-top: 10px;\"><a href=\"/" .. plural_name .. "/<%= " .. singular_name .. ".id %>\">Show</a> |",
-        "<a href=\"/" .. plural_name .. "\">Back to " .. plural_name .. "</a></div>"
-    }
-    write_file_content(views_dir .. "/edit.etl", table.concat(edit_content, "\n"))
-
-    -- _form.etl
-    local form_content = {
+        "",
         "<% if " .. singular_name .. ".errors:any() then %>",
         "  <div id=\"error_explanation\" style=\"color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 12px; border-radius: 4px; margin-bottom: 20px;\">",
         "    <h2 style=\"margin-top: 0; font-size: 1.25em;\"><%= " .. singular_name .. ".errors:size() %> error(s) prohibited this " .. singular_name .. " from being saved:</h2>",
@@ -890,47 +874,73 @@ local function generate_scaffold_views(resource_name, fields)
         "  </div>",
         "<% end %>",
         "",
-        "<form action=\"<%= action %>\" method=\"<%= method %>\" style=\"background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6;\">",
-        "  <% if _method then %><input type=\"hidden\" name=\"_method\" value=\"<%= _method %>\"><% end %>"
+        "<form action=\"/" .. plural_name .. "\" method=\"POST\" style=\"background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6;\">"
     }
+    
     for _, name in ipairs(column_order) do
         local col = column_definitions[name]
         local type = col.type
-
-        table.insert(form_content, "  <div style=\"margin-bottom: 15px;\">")
-        table.insert(form_content, "    <label style=\"display: block; font-weight: bold; margin-bottom: 5px;\">" .. camel_case(name) .. "</label>")
+        table.insert(new_content, "  <div style=\"margin-bottom: 15px;\">")
+        table.insert(new_content, "    <label style=\"display: block; font-weight: bold; margin-bottom: 5px;\">" .. camel_case(name) .. "</label>")
         
         if type == "text" then
-            table.insert(form_content, "    <textarea name=\"" .. name .. "\" style=\"width: 100%; max-width: 500px; height: 120px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\"><%= " .. singular_name .. "." .. name .. " or '' %></textarea>")
+            table.insert(new_content, "    <textarea name=\"" .. name .. "\" style=\"width: 100%; max-width: 500px; height: 120px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\"><%= " .. singular_name .. "." .. name .. " or '' %></textarea>")
         elseif type == "boolean" then
-            table.insert(form_content, "    <input type=\"checkbox\" name=\"" .. name .. "\" value=\"1\" <%= " .. singular_name .. "." .. name .. " and 'checked' or '' %> style=\"width: 20px; height: 20px;\">")
+            table.insert(new_content, "    <input type=\"checkbox\" name=\"" .. name .. "\" value=\"1\" <%= " .. singular_name .. "." .. name .. " and 'checked' or '' %> style=\"width: 20px; height: 20px;\">")
         elseif type == "integer" or type == "float" or type == "decimal" then
-            table.insert(form_content, "    <input type=\"number\" name=\"" .. name .. "\" step=\"" .. (type == "integer" and "1" or "any") .. "\" value=\"<%= " .. singular_name .. "." .. name .. " or '' %>\" style=\"width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\">")
-        elseif type == "date" then
-            table.insert(form_content, "    <input type=\"date\" name=\"" .. name .. "\" value=\"<%= " .. singular_name .. "." .. name .. " or '' %>\" style=\"width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\">")
-        elseif type == "datetime" then
-            table.insert(form_content, "    <input type=\"datetime-local\" name=\"" .. name .. "\" value=\"<%= " .. singular_name .. "." .. name .. " or '' %>\" style=\"width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\">")
-        elseif type == "time" then
-            table.insert(form_content, "    <input type=\"time\" name=\"" .. name .. "\" value=\"<%= " .. singular_name .. "." .. name .. " or '' %>\" style=\"width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\">")
-        elseif type == "references" then
-            -- Use _id suffix for the name to ensure it saves to the foreign key column
-            table.insert(form_content, "    <input type=\"number\" name=\"" .. name .. "_id\" value=\"<%= " .. singular_name .. "." .. name .. "_id or '' %>\" style=\"width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\">")
+            table.insert(new_content, "    <input type=\"number\" name=\"" .. name .. "\" step=\"" .. (type == "integer" and "1" or "any") .. "\" value=\"<%= " .. singular_name .. "." .. name .. " or '' %>\" style=\"width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\">")
         else
-            -- Use the provided type directly for HTML5 (fallback to text for string/other)
-            local input_type = type
-            if type == "string" or not type then input_type = "text" end
-            
-            if input_type == "color" then
-                table.insert(form_content, "    <input type=\"color\" name=\"" .. name .. "\" value=\"<%= " .. singular_name .. "." .. name .. " or '#000000' %>\" style=\"width: 60px; height: 40px; padding: 4px; border: 1px solid #ced4da; border-radius: 4px;\">")
-            else
-                table.insert(form_content, "    <input type=\"" .. input_type .. "\" name=\"" .. name .. "\" value=\"<%= " .. singular_name .. "." .. name .. " or '' %>\" style=\"width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\">")
-            end
+            table.insert(new_content, "    <input type=\"text\" name=\"" .. name .. "\" value=\"<%= " .. singular_name .. "." .. name .. " or '' %>\" style=\"width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\">")
         end
-        table.insert(form_content, "  </div>")
+        table.insert(new_content, "  </div>")
     end
-    table.insert(form_content, "  <button type=\"submit\" style=\"background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 1em; cursor: pointer;\">Save " .. camel_case(singular_name) .. "</button>")
-    table.insert(form_content, "</form>")
-    write_file_content(views_dir .. "/_form.etl", table.concat(form_content, "\n"))
+    table.insert(new_content, "  <button type=\"submit\" style=\"background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 1em; cursor: pointer;\">Create " .. camel_case(singular_name) .. "</button>")
+    table.insert(new_content, "</form>")
+    table.insert(new_content, "<br><a href=\"/" .. plural_name .. "\">Back to " .. plural_name .. "</a>")
+    write_file_content(views_dir .. "/new.etl", table.concat(new_content, "\n"))
+
+    -- edit.etl
+    local edit_content = {
+        flash_block,
+        "<h1>Editing " .. camel_case(singular_name) .. "</h1>",
+        "",
+        "<% if " .. singular_name .. ".errors:any() then %>",
+        "  <div id=\"error_explanation\" style=\"color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 12px; border-radius: 4px; margin-bottom: 20px;\">",
+        "    <h2 style=\"margin-top: 0; font-size: 1.25em;\"><%= " .. singular_name .. ".errors:size() %> error(s) prohibited this " .. singular_name .. " from being saved:</h2>",
+        "    <ul style=\"margin-bottom: 0;\">",
+        "      <% for _, msg in ipairs(" .. singular_name .. ".errors:full_messages()) do %>",
+        "        <li><%= msg %></li>",
+        "      <% end %>",
+        "    </ul>",
+        "  </div>",
+        "<% end %>",
+        "",
+        "<form action=\"/" .. plural_name .. "/<%= " .. singular_name .. ".id %>\" method=\"POST\" style=\"background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6;\">",
+        "  <input type=\"hidden\" name=\"_method\" value=\"PUT\">"
+    }
+    
+    for _, name in ipairs(column_order) do
+        local col = column_definitions[name]
+        local type = col.type
+        table.insert(edit_content, "  <div style=\"margin-bottom: 15px;\">")
+        table.insert(edit_content, "    <label style=\"display: block; font-weight: bold; margin-bottom: 5px;\">" .. camel_case(name) .. "</label>")
+        
+        if type == "text" then
+            table.insert(edit_content, "    <textarea name=\"" .. name .. "\" style=\"width: 100%; max-width: 500px; height: 120px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\"><%= " .. singular_name .. "." .. name .. " or '' %></textarea>")
+        elseif type == "boolean" then
+            table.insert(edit_content, "    <input type=\"checkbox\" name=\"" .. name .. "\" value=\"1\" <%= " .. singular_name .. "." .. name .. " and 'checked' or '' %> style=\"width: 20px; height: 20px;\">")
+        elseif type == "integer" or type == "float" or type == "decimal" then
+            table.insert(edit_content, "    <input type=\"number\" name=\"" .. name .. "\" step=\"" .. (type == "integer" and "1" or "any") .. "\" value=\"<%= " .. singular_name .. "." .. name .. " or '' %>\" style=\"width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\">")
+        else
+            table.insert(edit_content, "    <input type=\"text\" name=\"" .. name .. "\" value=\"<%= " .. singular_name .. "." .. name .. " or '' %>\" style=\"width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;\">")
+        end
+        table.insert(edit_content, "  </div>")
+    end
+    table.insert(edit_content, "  <button type=\"submit\" style=\"background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 1em; cursor: pointer;\">Update " .. camel_case(singular_name) .. "</button>")
+    table.insert(edit_content, "</form>")
+    table.insert(edit_content, "<br><div style=\"margin-top: 10px;\"><a href=\"/" .. plural_name .. "/<%= " .. singular_name .. ".id %>\">Show</a> |",
+    "<a href=\"/" .. plural_name .. "\">Back to " .. plural_name .. "</a></div>")
+    write_file_content(views_dir .. "/edit.etl", table.concat(edit_content, "\n"))
 
     print("Scaffold views for '" .. plural_name .. "' generated successfully.")
 end

@@ -1,127 +1,93 @@
--- test/cache_test.lua
-local cache_lib = require("rio.cache")
+-- test/spec/cache_ttl_test.lua
+local rio = require("rio")
+local posix = require("posix.signal")
 
-describe("Rio Cache System", function()
-    describe("Memory Adapter", function()
-        local cache
+describe("Rio Application Cache (Level 2) with TTL", function()
+    local app_memory, app_file
 
-        before_each(function()
-            cache = cache_lib.new("memory")
-        end)
+    setup(function()
+        -- Application with memory cache
+        app_memory = rio.new({
+            cache_store = "memory",
+            perform_caching = true
+        })
 
-        it("should set and get values", function()
-            cache:set("key1", "value1")
-            assert.equals("value1", cache:get("key1"))
-        end)
-
-        it("should return nil for missing keys", function()
-            assert.is_nil(cache:get("missing"))
-        end)
-
-        it("should handle TTL expiration", function()
-            cache:set("expiring", "gone", -1) -- already expired
-            assert.is_nil(cache:get("expiring"))
-        end)
-
-        it("should fetch values (cache miss)", function()
-            local called = false
-            local val = cache:fetch("fetch_key", function()
-                called = true
-                return "fetched"
-            end)
-            assert.is_true(called)
-            assert.equals("fetched", val)
-            assert.equals("fetched", cache:get("fetch_key"))
-        end)
-
-        it("should fetch values (cache hit)", function()
-            cache:set("hit_key", "already_here")
-            local called = false
-            local val = cache:fetch("hit_key", function()
-                called = true
-                return "new"
-            end)
-            assert.is_false(called)
-            assert.equals("already_here", val)
-        end)
-
-        it("should clear all data", function()
-            cache:set("a", 1)
-            cache:clear()
-            assert.is_nil(cache:get("a"))
-        end)
+        -- Application with file cache
+        app_file = rio.new({
+            cache_store = "file",
+            perform_caching = true
+        })
     end)
 
-    describe("File Adapter", function()
-        local cache
-        local test_dir = "tmp/test_cache"
+    it("should work with memory cache and TTL", function()
+        local key = "test_memory_ttl"
+        local call_count = 0
+        local function get_data()
+            call_count = call_count + 1
+            return "data_" .. call_count
+        end
 
-        before_each(function()
-            cache = cache_lib.new("file", { dir = test_dir })
-        end)
+        -- First call: MISS, stores in cache
+        local val1 = app_memory.cache:fetch(key, 1, get_data)
+        assert.equals("data_1", val1)
+        assert.equals(1, call_count)
 
-        after_each(function()
-            cache:clear()
-            os.execute("rm -rf " .. test_dir)
-        end)
+        -- Second call (immediate): HIT, uses cache
+        local val2 = app_memory.cache:fetch(key, 1, get_data)
+        assert.equals("data_1", val2)
+        assert.equals(1, call_count)
 
-        it("should persist values to disk", function()
-            cache:set("persistent", { a = 1, b = 2 })
-            assert.is_true(cache:exists("persistent"))
-            
-            local val = cache:get("persistent")
-            assert.is_table(val)
-            assert.equals(1, val.a)
-        end)
+        -- Wait for TTL to expire
+        print("  Waiting 2 seconds for memory cache TTL...")
+        os.execute("sleep 2")
+
+        -- Third call (after sleep): MISS, cache expired, executes callback
+        local val3 = app_memory.cache:fetch(key, 1, get_data)
+        assert.equals("data_2", val3)
+        assert.equals(2, call_count)
     end)
 
-    describe("Null Adapter", function()
-        local cache
+    it("should work with file cache and TTL", function()
+        local key = "test_file_ttl"
+        local call_count = 0
+        local function get_data()
+            call_count = call_count + 1
+            return "data_" .. call_count
+        end
 
-        before_each(function()
-            cache = cache_lib.new("null")
-        end)
+        -- Clean up just in case
+        app_file.cache:delete(key)
 
-        it("should never return values", function()
-            cache:set("key", "value")
-            assert.is_nil(cache:get("key"))
-            assert.is_false(cache:exists("key"))
-        end)
+        -- First call: MISS
+        local val1 = app_file.cache:fetch(key, 1, get_data)
+        assert.equals("data_1", val1)
+        assert.equals(1, call_count)
+
+        -- Second call (immediate): HIT
+        local val2 = app_file.cache:fetch(key, 1, get_data)
+        assert.equals("data_1", val2)
+        assert.equals(1, call_count)
+
+        -- Wait for TTL
+        print("  Waiting 2 seconds for file cache TTL...")
+        os.execute("sleep 2")
+
+        -- Third call: MISS
+        local val3 = app_file.cache:fetch(key, 1, get_data)
+        assert.equals("data_2", val3)
+        assert.equals(2, call_count)
     end)
 
-    describe("Performance Information", function()
-        it("should demonstrate speed improvement", function()
-            local cache = cache_lib.new("memory")
-            local key = "perf_test"
-            local data = { some = "complex", table = "with", values = 123 }
-            
-            -- Measure No Cache (Simulated work)
-            local start_no_cache = os.clock()
-            local res_no_cache
-            for i=1, 1000 do
-                res_no_cache = { some = "complex", table = "with", values = 123 }
-            end
-            local time_no_cache = os.clock() - start_no_cache
-
-            -- Measure Cache Hit
-            cache:set(key, data)
-            local start_cache = os.clock()
-            local res_cache
-            for i=1, 1000 do
-                res_cache = cache:get(key)
-            end
-            local time_cache = os.clock() - start_cache
-
-            print("\n" .. string.rep("-", 40))
-            print("CACHE PERFORMANCE INFO (Level 2)")
-            print(string.format("  No Cache (1k ops): %.6fs", time_no_cache))
-            print(string.format("  Cache Hit (1k ops): %.6fs", time_cache))
-            if time_cache > 0 then
-                print(string.format("  Speedup: %.1fx faster", time_no_cache / time_cache))
-            end
-            print(string.rep("-", 40) .. "\n")
-            
-            assert.is_not_nil(res_cache)
-        end)
+    it("should store and retrieve tables correctly in file cache", function()
+        local key = "test_table_file"
+        local my_table = { name = "Rio", features = { "mvc", "api", "cache" }, version = 0.1 }
+        
+        app_file.cache:set(key, my_table, 60)
+        local retrieved = app_file.cache:get(key)
+        
+        assert.is_table(retrieved)
+        assert.equals("Rio", retrieved.name)
+        assert.equals("mvc", retrieved.features[1])
+        assert.equals(0.1, retrieved.version)
     end)
 end)

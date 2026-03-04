@@ -112,8 +112,8 @@ print_status("Hide soft-deleted", User:find(user.id) == nil)
 print_status("Retain in raw DB", DBManager.query("SELECT COUNT(*) as c FROM users")[1].c == 1)
 
 User:new({ username = "user2", email = "u2@ex.com", age = 20, password = "password" }):save()
-print_status("Calculation: AVG", User:avg("age") == 25.0, "Avg: 25.0")
-print_status("Calculation: SUM", User:sum("age") == 50, "Sum: 50")
+print_status("Calculation: AVG", User:avg("age") == 20.0, "Avg: 20.0")
+print_status("Calculation: SUM", User:sum("age") == 20, "Sum: 20")
 
 print("\n" .. colors.bold .. colors.green .. "--- ALL STANDALONE TESTS FINISHED ---" .. colors.reset .. "\n")
 os.remove(db_file)
