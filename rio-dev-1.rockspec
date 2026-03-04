@@ -75,5 +75,6 @@ build = {
       bin = {
          ["rio"] = "bin/rio"
       }
-   }
+   },
+   copy_directories = { "man" }
 }
