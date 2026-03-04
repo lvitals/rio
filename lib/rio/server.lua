@@ -137,7 +137,7 @@ function Server:on_not_found(handler)
 end
 
 -- Routing methods
-local function wrap_handler_with_meta(self, method, path, handler)
+function Server:_to_handler(handler)
     if type(handler) == "string" then
         local controller_name, action_name = handler:match("([^@]+)@([^@]+)")
         if controller_name and action_name then
@@ -154,9 +154,14 @@ local function wrap_handler_with_meta(self, method, path, handler)
                 controller = controller_name,
                 action = action_name
             }
-            handler = simple_handler
+            return simple_handler
         end
     end
+    return handler
+end
+
+local function wrap_handler_with_meta(self, method, path, handler)
+    handler = self:_to_handler(handler)
     self.router:add_route(method:upper(), path, handler)
     return self
 end
@@ -170,9 +175,13 @@ function Server:options(path, handler) return wrap_handler_with_meta(self, "OPTI
 function Server:head(path, handler) return wrap_handler_with_meta(self, "HEAD", path, handler) end
 
 function Server:resources(name, controller_name)
-    local controller_module_name = "app.controllers." .. (controller_name or (name .. "_controller"))
-    local simple_controller_name = (controller_name or (name .. "_controller"))
-    
+    local controller_module_name = (controller_name or (name .. "_controller"))
+    if not controller_module_name:find("_controller$") then
+        controller_module_name = controller_module_name .. "_controller"
+    end
+    local simple_controller_name = controller_module_name:gsub("_controller$", ""):gsub("^app%.controllers%.", "")
+    simple_controller_name = simple_controller_name:sub(1,1):upper() .. simple_controller_name:sub(2)
+
     -- Capture source location of the resources() call
     local info = debug.getinfo(2, "Sl")
     local source_loc = "unknown"
@@ -180,48 +189,29 @@ function Server:resources(name, controller_name)
         source_loc = string.format("%s:%d", info.short_src, info.currentline)
     end
 
-    -- Function to safely call a controller method if it exists
-    local function call_controller_method(method_name, ctx)
-        local ok_require, controller = pcall(require, controller_module_name)
-        if not ok_require then
-            return ctx:text("Error: Could not load controller '" .. controller_module_name .. "': " .. tostring(controller), 500)
-        end
-        
-        if controller[method_name] then
-            return controller[method_name](controller, ctx)
-        else
-            return ctx:text("Action '" .. method_name .. "' not found in controller '" .. controller_module_name .. "'", 404)
-        end
-    end
-
     -- Helper to add route with metadata
-    local function add_route(method, path, action)
-        local h = function(ctx) return call_controller_method(action, ctx) end
-        self.routes_meta[h] = {
-            controller = simple_controller_name,
-            action = action,
-            source = source_loc
-        }
-        self[method](self, path, h)
+    local function add_route(method, action, path)
+        local handler_str = simple_controller_name .. "@" .. action
+        self[method](self, "/" .. name .. (path or ""), handler_str)
     end
 
     -- Define standard RESTful routes
-    add_route("get", "/" .. name, "index")
+    add_route("get", "index")
     
     if not self.config.api_only then
-        add_route("get", "/" .. name .. "/new", "new")
+        add_route("get", "new", "/new")
     end
 
-    add_route("post", "/" .. name, "create")
-    add_route("get", "/" .. name .. "/:id", "show")
+    add_route("post", "create")
+    add_route("get", "show", "/:id")
     
     if not self.config.api_only then
-        add_route("get", "/" .. name .. "/:id/edit", "edit")
+        add_route("get", "edit", "/:id/edit")
     end
 
-    add_route("put", "/" .. name .. "/:id", "update")
-    add_route("patch", "/" .. name .. "/:id", "update")
-    add_route("delete", "/" .. name .. "/:id", "destroy")
+    add_route("put", "update", "/:id")
+    add_route("patch", "update", "/:id")
+    add_route("delete", "destroy", "/:id")
     
     return self
 end
@@ -229,6 +219,10 @@ end
 -- Helper to wrap a handler with middlewares
 function Server:wrap(handler, ...)
     local mws = {...}
+    
+    -- Ensure handler is converted from string if needed
+    handler = self:_to_handler(handler)
+    
     if #mws == 0 then return handler end
     
     local wrapped = function(ctx)
@@ -242,15 +236,13 @@ function Server:wrap(handler, ...)
             local mw = mws[index]
             index = index + 1
             
-            -- If it's a string, try to resolve it (like self:use)
-            -- For now, we assume they are functions
             return mw(ctx, next_mw)
         end
         
         return next_mw()
     end
     
-    -- Propagate metadata for CLI route listing
+    -- Propagate metadata for CLI route listing and OpenAPI
     if type(handler) == "function" and self.routes_meta and self.routes_meta[handler] then
         self.routes_meta[wrapped] = self.routes_meta[handler]
     end

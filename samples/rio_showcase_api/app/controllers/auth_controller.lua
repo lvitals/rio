@@ -43,6 +43,41 @@ AuthController.openapi = {
                 }
             }
         }
+    },
+    me = {
+        summary = "Current User Info",
+        description = "Returns information about the currently authenticated user based on the JWT token",
+        responses = {
+            ["200"] = {
+                description = "User information retrieved successfully",
+                content = {
+                    ["application/json"] = {
+                        example = {
+                            user = {
+                                id = 1,
+                                username = "admin",
+                                email = "admin@rio.dev",
+                                created_at = "2024-03-04 12:00:00",
+                                updated_at = "2024-03-04 12:00:00"
+                            },
+                            jwt_payload = {
+                                sub = "1",
+                                username = "admin",
+                                exp = 1712345678
+                            }
+                        }
+                    }
+                }
+            },
+            ["401"] = {
+                description = "Unauthorized - Missing or invalid token",
+                content = {
+                    ["application/json"] = {
+                        example = { error = "Unauthorized" }
+                    }
+                }
+            }
+        }
     }
 }
 
