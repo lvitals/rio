@@ -1,0 +1,23 @@
+<header style="background: #343a40; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; font-family: sans-serif; margin-bottom: 20px;">
+    <div class="logo">
+        <a href="/" style="color: white; text-decoration: none; font-size: 1.5em; font-weight: bold;">Rio Showcase</a>
+    </div>
+    <nav>
+        <% if user then %>
+            <% 
+               -- Robust check for administrator status (SQLite returns 0/1)
+               local is_admin = (user.is_admin == true or user.is_admin == 1 or user.is_admin == "1")
+               if is_admin then 
+            %>
+                <a href="/admin/users" style="color: #17a2b8; text-decoration: none; margin-right: 15px;">User Management</a>
+            <% end %>
+            
+            <a href="/tasks" style="color: white; text-decoration: none; margin-right: 15px;">Tasks</a>
+            
+            <span style="margin-right: 15px;">Hello, <b><%= user.username %></b></span>
+            <a href="/logout" style="color: #ffc107; text-decoration: none; border: 1px solid #ffc107; padding: 5px 10px; border-radius: 4px;">Logout</a>
+        <% elseif request_path ~= "/login" then %>
+            <a href="/login" style="color: white; text-decoration: none;">Login</a>
+        <% end %>
+    </nav>
+</header>

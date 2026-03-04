@@ -4,7 +4,8 @@
 local compat = require("rio.utils.compat")
 
 local function rio_to_openapi_path(path)
-    return path:gsub(":(%w+)", "{%1}")
+    local openapi_path = path:gsub(":(%w+)", "{%1}")
+    return openapi_path == "" and "/" or openapi_path
 end
 
 local function get_path_params(path)
@@ -27,7 +28,7 @@ function M.create(app, options)
     local docs_path = options.path or app.config.openapi_path or "/docs"
     local json_path = options.json_path or app.config.openapi_json_path or "/openapi.json"
     
-    -- Define available formats for the Swagger dropdown
+    -- Restored: Support for both standard JSON and JSON:API
     local available_formats = {
         ["application/json"] = { schema = { type = "object" } },
         ["application/vnd.api+json"] = { schema = { type = "object" } }
@@ -54,7 +55,6 @@ function M.create(app, options)
         local tags_found = {}
 
         if app.router and app.router.routes then
-            -- Router organizes routes by method: router.routes[METHOD] = { {path, handler}, ... }
             for method, routes in pairs(app.router.routes) do
                 local method_lower = method:lower()
                 for _, route in ipairs(routes) do
@@ -62,14 +62,10 @@ function M.create(app, options)
                         local path = rio_to_openapi_path(route.path)
                         spec.paths[path] = spec.paths[path] or {}
                         
-                        -- Group by the static part of the path (before any parameters)
-                        -- e.g., /api/users/:id -> tag: api/users
-                        local static_segments = {}
-                        for s in route.path:gmatch("([^/]+)") do
-                            if s:sub(1,1) == ":" then break end
-                            table.insert(static_segments, s)
-                        end
-                        local tag = #static_segments > 0 and table.concat(static_segments, "/") or "default"
+                        -- Grouping by the first path segment
+                        local tag = "default"
+                        local first_segment = route.path:match("/([^/:]+)")
+                        if first_segment then tag = first_segment end
                         tags_found[tag] = true
 
                         local operation = {
@@ -92,13 +88,45 @@ function M.create(app, options)
                             }
                         end
 
+                        -- REFRECTION: Extract METADATA from Controller (_openapi)
+                        if app.routes_meta and app.routes_meta[route.handler] then
+                            local meta = app.routes_meta[route.handler]
+                            local controller_name = meta.controller
+                            local action_name = meta.action
+
+                            -- Attempt to load controller to find openapi table
+                            local controller_module = controller_name:lower()
+                            if not controller_module:find("_controller$") then
+                                controller_module = controller_module .. "_controller"
+                            end
+
+                            local ok, controller = pcall(require, "app.controllers." .. controller_module)
+                            if ok and type(controller) == "table" and controller.openapi then
+                                local custom_meta = controller.openapi[action_name]
+                                if custom_meta then
+                                    if custom_meta.summary then operation.summary = custom_meta.summary end
+                                    if custom_meta.description then operation.description = custom_meta.description end
+                                    
+                                    -- Map snake_case 'request_body' to OpenAPI' 'requestBody'
+                                    if custom_meta.request_body then
+                                        operation.requestBody = custom_meta.request_body
+                                    elseif custom_meta.requestBody then
+                                        operation.requestBody = custom_meta.requestBody
+                                    end
+                                    
+                                    if custom_meta.responses then operation.responses = custom_meta.responses end
+                                    if custom_meta.parameters then operation.parameters = custom_meta.parameters end
+                                    if custom_meta.tags then operation.tags = custom_meta.tags end
+                                end
+                            end
+                        end
+
                         spec.paths[path][method_lower] = operation
                     end
                 end
             end
         end
 
-        -- Sort tags alphabetically
         local sorted_tags = {}
         for t in pairs(tags_found) do table.insert(sorted_tags, t) end
         table.sort(sorted_tags)
@@ -112,9 +140,6 @@ function M.create(app, options)
     return function(ctx, next_mw)
         if ctx.path == json_path then
             local spec = build_spec()
-            -- When returning the spec itself, we might also want to respect the JSON:API header
-            -- but usually openapi.json is application/json. 
-            -- However, the user might want the API responses documented as jsonapi.
             return ctx:json(spec)
         end
         
@@ -129,7 +154,7 @@ function M.create(app, options)
 <body>
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-  <script>
+  <script script>
     window.onload = () => {
       SwaggerUIBundle({
         url: ']] .. json_path .. [[',

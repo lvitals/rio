@@ -215,7 +215,15 @@ function M.view(stream, status, view_name, data, headers_obj)
     if not render_data.render then
         render_data.render = function(partial_name, partial_data)
             local partial_path = "app/views/" .. partial_name .. ".etl"
-            local html, err = etl.render_file(partial_path, partial_data or render_data)
+            
+            -- Merge parent data with partial data
+            local merged_data = {}
+            for k, v in pairs(render_data) do merged_data[k] = v end
+            if type(partial_data) == "table" then
+                for k, v in pairs(partial_data) do merged_data[k] = v end
+            end
+            
+            local html, err = etl.render_file(partial_path, merged_data)
             return html or ("<!-- Error rendering partial " .. partial_name .. ": " .. tostring(err) .. " -->")
         end
     end

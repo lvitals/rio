@@ -1,0 +1,24 @@
+<%- render("shared/_header") %>
+<h1>User Details</h1>
+
+<% if notice then %><div style="color: green; margin-bottom: 15px;"><%= notice %></div><% end %>
+
+<div style="background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 500px;">
+    <p><strong>Username:</strong> <%= target_user.username %></p>
+    <p><strong>Email:</strong> <%= target_user.email %></p>
+    <p><strong>Administrator:</strong> 
+        <% 
+           -- Robust boolean check for SQLite (0/1) or Lua (false/true)
+           local is_admin = target_user.is_admin
+           if is_admin == true or is_admin == 1 or is_admin == "1" then 
+        %>
+            <span style="color: green; font-weight: bold;">Yes</span>
+        <% else %>
+            <span style="color: red;">No</span>
+        <% end %>
+    </p>
+    <p><strong>Created at:</strong> <%= target_user.created_at %></p>
+    <hr>
+    <a href="/admin/users/<%= target_user.id %>/edit">Edit this user</a> |
+    <a href="/admin/users">Back to list</a>
+</div>

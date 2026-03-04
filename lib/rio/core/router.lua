@@ -58,14 +58,15 @@ function Router:add_route(method, path, handler)
         pattern = pattern,
         names = names,
         handler = handler,
-        path = fullPath
+        path = fullPath,
+        meta = options -- Store metadata like controller and action
     })
 end
 
 -- Convenience methods
 for _, method in ipairs(METHODS) do
-    Router[method:lower()] = function(self, path, handler)
-        return self:add_route(method, path, handler)
+    Router[method:lower()] = function(self, path, handler, options)
+        return self:add_route(method, path, handler, options)
     end
 end
 

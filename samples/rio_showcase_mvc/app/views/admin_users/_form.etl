@@ -1,0 +1,48 @@
+<form action="<%= action %>" method="POST" style="max-width: 500px; background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+    <% if method == "PUT" or method == "PATCH" then %>
+        <input type="hidden" name="_method" value="PATCH">
+    <% end %>
+
+    <% if target_user.errors:any() then %>
+        <div style="background: #f8d7da; color: #721c24; padding: 10px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #f5c6cb;">
+            <strong style="display: block; margin-bottom: 5px;"><%= target_user.errors:size() %> error(s) found:</strong>
+            <ul style="margin: 0; padding-left: 20px;">
+                <% for _, msg in ipairs(target_user.errors:full_messages()) do %>
+                    <li><%= msg %></li>
+                <% end %>
+            </ul>
+        </div>
+    <% end %>
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: bold;">Username</label>
+        <input type="text" name="username" value="<%= target_user.username or '' %>" style="width: 100%; padding: 8px;" required>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: bold;">Email</label>
+        <input type="email" name="email" value="<%= target_user.email or '' %>" style="width: 100%; padding: 8px;" required>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: bold;">Password</label>
+        <input type="password" name="password" style="width: 100%; padding: 8px;" <%= (not target_user.id) and "required" or "" %>>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: bold;">Confirm Password</label>
+        <input type="password" name="password_confirmation" style="width: 100%; padding: 8px;" <%= (not target_user.id) and "required" or "" %>>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <label>
+            <% local is_checked = (target_user.is_admin == true or target_user.is_admin == 1 or target_user.is_admin == "1") %>
+            <input type="checkbox" name="is_admin" <%= is_checked and "checked" or "" %>> Is Administrator?
+        </label>
+    </div>
+
+    <button type="submit" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+        <%= (target_user.id) and "Update User" or "Create User" %>
+    </button>
+    <a href="/admin/users" style="margin-left: 10px; color: #666;">Cancel</a>
+</form>

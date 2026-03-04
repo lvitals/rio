@@ -1,0 +1,40 @@
+<%- render("shared/_header") %>
+
+<h1>User Management (Admin)</h1>
+
+<% if notice then %><div style="color: green; margin-bottom: 15px;"><%= notice %></div><% end %>
+<% if alert then %><div style="color: red; margin-bottom: 15px;"><%= alert %></div><% end %>
+
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+  <thead>
+    <tr style="background: #eee; text-align: left;">
+      <th style="padding: 10px; border: 1px solid #ddd;">ID</th>
+      <th style="padding: 10px; border: 1px solid #ddd;">Username</th>
+      <th style="padding: 10px; border: 1px solid #ddd;">Email</th>
+      <th style="padding: 10px; border: 1px solid #ddd;">Admin?</th>
+      <th style="padding: 10px; border: 1px solid #ddd;">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for _, u in ipairs(users) do %>
+    <tr>
+      <td style="padding: 10px; border: 1px solid #ddd;"><%= u.id %></td>
+      <td style="padding: 10px; border: 1px solid #ddd;"><%= u.username %></td>
+      <td style="padding: 10px; border: 1px solid #ddd;"><%= u.email %></td>
+      <td style="padding: 10px; border: 1px solid #ddd;">
+        <%= (u.is_admin == true or u.is_admin == 1 or u.is_admin == "1") and "✅ Yes" or "❌ No" %>
+      </td>
+      <td style="padding: 10px; border: 1px solid #ddd;">
+        <a href="/admin/users/<%= u.id %>">Show</a> |
+        <a href="/admin/users/<%= u.id %>/edit">Edit</a> |
+        <form action="/admin/users/<%= u.id %>" method="POST" style="display:inline">
+            <input type="hidden" name="_method" value="DELETE">
+            <button type="submit" style="color: red; border: none; background: none; cursor: pointer; padding: 0; text-decoration: underline;" onclick="return confirm('Delete user?')">Destroy</button>
+        </form>
+      </td>
+    </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<a href="/admin/users/new" style="background: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px;">Create New User</a>

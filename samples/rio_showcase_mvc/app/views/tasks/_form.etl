@@ -1,0 +1,27 @@
+<% if task.errors:any() then %>
+  <div id="error_explanation" style="color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
+    <h2 style="margin-top: 0; font-size: 1.25em;"><%= task.errors:size() %> error(s) prohibited this task from being saved:</h2>
+    <ul style="margin-bottom: 0;">
+      <% for _, msg in ipairs(task.errors:full_messages()) do %>
+        <li><%= msg %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
+
+<form action="<%= action %>" method="<%= method %>" style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6;">
+  <% if _method then %><input type="hidden" name="_method" value="<%= _method %>"><% end %>
+  <div style="margin-bottom: 15px;">
+    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Title</label>
+    <input type="text" name="title" value="<%= task.title or '' %>" style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+  </div>
+  <div style="margin-bottom: 15px;">
+    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Description</label>
+    <textarea name="description" style="width: 100%; max-width: 500px; height: 120px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;"><%= task.description or '' %></textarea>
+  </div>
+  <div style="margin-bottom: 15px;">
+    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Status</label>
+    <input type="text" name="status" value="<%= task.status or '' %>" style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+  </div>
+  <button type="submit" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 1em; cursor: pointer;">Save Task</button>
+</form>

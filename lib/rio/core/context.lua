@@ -56,10 +56,44 @@ function M.new(stream, config)
         notice = query.notice,
         alert = query.alert
     }
+
+    -- Aliases for better DX
+    ctx.req = ctx
+    ctx.res = ctx
     
     -- Convenience method to set a response header
     function ctx:setHeader(key, value)
         self.response_headers:append(key, value)
+    end
+
+    -- Cookie Helper
+    function ctx:setCookie(name, value, options)
+        options = options or {}
+        local cookie = name .. "=" .. (value or "")
+        
+        if options.path then cookie = cookie .. "; Path=" .. options.path end
+        if options.domain then cookie = cookie .. "; Domain=" .. options.domain end
+        if options.max_age then cookie = cookie .. "; Max-Age=" .. options.max_age end
+        if options.http_only then cookie = cookie .. "; HttpOnly" end
+        if options.secure then cookie = cookie .. "; Secure" end
+        if options.same_site then cookie = cookie .. "; SameSite=" .. options.same_site end
+        
+        self:setHeader("Set-Cookie", cookie)
+    end
+
+    function ctx:getCookie(name)
+        local cookie_header = self:getHeader("cookie")
+        if not cookie_header then return nil end
+        
+        -- Improved cookie parser: handles "key=value; key2=value2" with spaces
+        for k, v in cookie_header:gmatch("([^%s=;]+)=([^;]*)") do
+            if k == name then 
+                -- Trim whitespace and return
+                local val = v:gsub("^%s*(.-)%s*$", "%1")
+                return val ~= "" and val or nil
+            end
+        end
+        return nil
     end
 
     -- Convenience response methods
@@ -114,9 +148,18 @@ function M.new(stream, config)
     
     function ctx:view(view_path, data, status, extra_headers)
         local view_data = data or {}
-        -- Automatically include notice/alert in view data
+        
+        -- Auto-inject state variables (like 'user' from session middleware)
+        for k, v in pairs(self.state) do
+            if view_data[k] == nil then
+                view_data[k] = v
+            end
+        end
+
+        -- Automatically include notice/alert and path in view data
         view_data.notice = view_data.notice or self.notice
         view_data.alert = view_data.alert or self.alert
+        view_data.request_path = self.path
         
         for k, v in pairs(extra_headers or {}) do self:setHeader(k, v) end
         return response.view(self.stream, status or 200, view_path, view_data, self.response_headers)

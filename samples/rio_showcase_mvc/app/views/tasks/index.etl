@@ -1,0 +1,29 @@
+<%- render("shared/_header", { user = user }) %>
+<% if notice then %><div style="color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; padding: 12px; border-radius: 4px; margin-bottom: 20px;"><%= notice %></div><% end %>
+<% if alert then %><div style="color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 12px; border-radius: 4px; margin-bottom: 20px;"><%= alert %></div><% end %>
+
+<h1>Tasks</h1>
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+  <thead>
+    <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+      <th style="padding: 12px; text-align: left;">Title</th>
+      <th style="padding: 12px; text-align: left;">Description</th>
+      <th style="padding: 12px; text-align: left;">Status</th>
+      <th colspan="3" style="padding: 12px;"></th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for _, item in ipairs(tasks) do %>
+    <tr style="border-bottom: 1px solid #dee2e6;">
+      <td style="padding: 12px;"><%= item.title %></td>
+      <td style="padding: 12px;"><%= item.description %></td>
+      <td style="padding: 12px;"><%= item.status %></td>
+      <td style="padding: 12px;"><a href="/tasks/<%= item.id %>">Show</a></td>
+      <td style="padding: 12px;"><a href="/tasks/<%= item.id %>/edit">Edit</a></td>
+      <td style="padding: 12px;"><form action="/tasks/<%= item.id %>" method="POST" style="display:inline"><input type="hidden" name="_method" value="DELETE"><button type="submit" style="background: none; border: none; color: #dc3545; cursor: pointer; text-decoration: underline; padding: 0;" onclick="return confirm('Are you sure?')">Destroy</button></form></td>
+    </tr>
+    <% end %>
+  </tbody>
+</table>
+<br>
+<a href="/tasks/new" style="display: inline-block; background-color: #007bff; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none;">New Task</a>

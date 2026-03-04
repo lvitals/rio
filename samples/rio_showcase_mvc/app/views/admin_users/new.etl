@@ -1,0 +1,4 @@
+<%- render("shared/_header") %>
+<h1>Create User</h1>
+<% if alert then %><div style="color: red; margin-bottom: 15px;"><%= alert %></div><% end %>
+<%- render("admin_users/_form", { action = "/admin/users", method = "POST" }) %>

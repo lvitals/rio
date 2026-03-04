@@ -1,0 +1,4 @@
+<%- render("shared/_header") %>
+<h1>Editing User: <%= target_user.username %></h1>
+<% if alert then %><div style="color: red; margin-bottom: 15px;"><%= alert %></div><% end %>
+<%- render("admin_users/_form", { action = "/admin/users/" .. target_user.id, method = "PATCH" }) %>

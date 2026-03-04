@@ -1,0 +1,8 @@
+<%- render("shared/_header", { user = user }) %>
+<% if notice then %><div style="color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; padding: 12px; border-radius: 4px; margin-bottom: 20px;"><%= notice %></div><% end %>
+<% if alert then %><div style="color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 12px; border-radius: 4px; margin-bottom: 20px;"><%= alert %></div><% end %>
+
+<h1>Editing Task</h1>
+<%- render("tasks/_form", { action = "/tasks/" .. task.id, method = "POST", _method = "PUT", task = task }) %>
+<br><div style="margin-top: 10px;"><a href="/tasks/<%= task.id %>">Show</a> |
+<a href="/tasks">Back to tasks</a></div>

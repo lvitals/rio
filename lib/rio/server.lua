@@ -137,13 +137,37 @@ function Server:on_not_found(handler)
 end
 
 -- Routing methods
-function Server:get(path, handler) self.router:add_route("GET", path, handler) return self end
-function Server:post(path, handler) self.router:add_route("POST", path, handler) return self end
-function Server:put(path, handler) self.router:add_route("PUT", path, handler) return self end
-function Server:patch(path, handler) self.router:add_route("PATCH", path, handler) return self end
-function Server:delete(path, handler) self.router:add_route("DELETE", path, handler) return self end
-function Server:options(path, handler) self.router:add_route("OPTIONS", path, handler) return self end
-function Server:head(path, handler) self.router:add_route("HEAD", path, handler) return self end
+local function wrap_handler_with_meta(self, method, path, handler)
+    if type(handler) == "string" then
+        local controller_name, action_name = handler:match("([^@]+)@([^@]+)")
+        if controller_name and action_name then
+            local full_controller_module = "app.controllers." .. controller_name:lower():gsub("controller$", "") .. "_controller"
+            local simple_handler = function(ctx)
+                local ok, controller = pcall(require, full_controller_module)
+                if not ok then return ctx:text("Controller not found: " .. full_controller_module, 500) end
+                if not controller[action_name] then return ctx:text("Action not found: " .. action_name, 404) end
+                return controller[action_name](controller, ctx)
+            end
+            
+            -- Store metadata for reflection
+            self.routes_meta[simple_handler] = {
+                controller = controller_name,
+                action = action_name
+            }
+            handler = simple_handler
+        end
+    end
+    self.router:add_route(method:upper(), path, handler)
+    return self
+end
+
+function Server:get(path, handler) return wrap_handler_with_meta(self, "GET", path, handler) end
+function Server:post(path, handler) return wrap_handler_with_meta(self, "POST", path, handler) end
+function Server:put(path, handler) return wrap_handler_with_meta(self, "PUT", path, handler) end
+function Server:patch(path, handler) return wrap_handler_with_meta(self, "PATCH", path, handler) end
+function Server:delete(path, handler) return wrap_handler_with_meta(self, "DELETE", path, handler) end
+function Server:options(path, handler) return wrap_handler_with_meta(self, "OPTIONS", path, handler) end
+function Server:head(path, handler) return wrap_handler_with_meta(self, "HEAD", path, handler) end
 
 function Server:resources(name, controller_name)
     local controller_module_name = "app.controllers." .. (controller_name or (name .. "_controller"))
@@ -330,6 +354,8 @@ local function run_middlewares(middlewares, ctx, index)
     local middleware = middlewares[index].handler
     
     local next_fn = function()
+        -- If headers were already sent by the current middleware, stop here
+        if ctx.stream and ctx.stream.headers_sent then return false end
         return run_middlewares(middlewares, ctx, index + 1)
     end
     
@@ -337,12 +363,13 @@ local function run_middlewares(middlewares, ctx, index)
     local ok, result = pcall(middleware, ctx, next_fn)
     
     if not ok then
-        return false, result -- Error occurred
+        return false, result -- Actual error occurred
     end
     
-    -- If middleware returns false explicitly, stop the chain
-    if result == false then
-        return false -- Chain stopped by middleware
+    -- If middleware returns false explicitly, or headers were sent, stop the chain
+    -- But return true to indicate NO ERROR occurred (just stop)
+    if result == false or (ctx.stream and ctx.stream.headers_sent) then
+        return "stop", nil
     end
     
     return true
@@ -365,7 +392,7 @@ function Server:_handle_request(stream)
     -- Run global middlewares
     local ok, err = run_middlewares(self.middlewares, ctx)
 
-    if not ok then
+    if ok == false then
         if self.error_handler then
              pcall(self.error_handler, ctx, err)
         end
@@ -376,8 +403,8 @@ function Server:_handle_request(stream)
         return
     end
 
-    -- If middleware returned false, it handled the request and stopped the chain
-    if err == false or stream.headers_sent then
+    -- If middleware stopped the chain (ok == "stop") or headers were sent, finish
+    if ok == "stop" or stream.headers_sent then
         finish()
         return
     end

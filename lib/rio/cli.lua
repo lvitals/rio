@@ -302,10 +302,10 @@ return {}
     write_file_content(config_dir .. "/routes.lua", [[
 -- config/routes.lua
 -- Defines the application's routes using the Rio router.
-local Home = require("app.controllers.home_controller")
 
 return function(app)
-    app:get("/", function(ctx) Home:index(ctx) end)
+    -- Format: "ControllerName@actionName" enables auto-documentation
+    app:get("/", "Home@index")
 end
 ]])
 
