@@ -12,8 +12,8 @@ WORKDIR /rio
 COPY lib/ ./lib/
 COPY bin/ ./bin/
 COPY bootstrap.lua .
-COPY rio-0.1.3-1.rockspec .
-RUN luarocks make rio-0.1.3-1.rockspec --tree /usr/local
+COPY rio-dev-1.rockspec .
+RUN luarocks make rio-dev-1.rockspec --tree /usr/local
 
 # Setup app
 WORKDIR /app

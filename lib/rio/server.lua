@@ -264,36 +264,38 @@ end
 
 -- Server Entry Points
 function Server:handle_ngx()
-    local adapter = require("rio.adapters.openresty").new()
+    local adapter_name = self.config.adapter or "openresty"
+    local adapter = require("rio.core.adapters." .. adapter_name).new()
     return self:_process_request(adapter)
 end
 
 function Server:listen(port, host)
     local h = host or os.getenv("RIO_BINDING") or self.config.server and self.config.server.host or "0.0.0.0"
     local p = port or tonumber(os.getenv("RIO_PORT")) or self.config.server and self.config.server.port or 8080
+    local adapter_module = "rio.core.adapters." .. (self.config.adapter or "standalone")
     
-    local ok, my_server = pcall(compat.http_server.listen, {
+    local ok, instance = pcall(compat.http_server.listen, {
         host = h, port = p, reuseaddr = true,
         onstream = function(_, stream)
-            local adapter = require("rio.adapters.standalone").new(stream)
+            local adapter = require(adapter_module).new(stream)
             self:_process_request(adapter)
         end
     })
 
     if not ok then
-        io.stderr:write("Error starting server: " .. tostring(my_server) .. "\n")
+        io.stderr:write("Error starting server: " .. tostring(instance) .. "\n")
         return false
     end
 
     print(string.format("Rio server listening on http://%s:%d", h, p))
     
     compat.signal.signal(compat.signal.SIGINT, function()
-        if type(my_server) == "table" and my_server.close then my_server:close() end
+        if type(instance) == "table" and instance.close then instance:close() end
         os.exit(0)
     end)
     
-    if type(my_server) == "table" and my_server.loop then
-        my_server:loop()
+    if type(instance) == "table" and instance.loop then
+        instance:loop()
     end
     
     return true

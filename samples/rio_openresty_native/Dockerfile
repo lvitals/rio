@@ -8,7 +8,7 @@ RUN luarocks install luasql-postgres PGSQL_INCDIR=/usr/include/postgresql
 
 WORKDIR /rio
 COPY . .
-RUN luarocks make rio-0.1.3-1.rockspec
+RUN luarocks make rio-dev-1.rockspec
 
 WORKDIR /app
 COPY samples/rio_openresty_native/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf
