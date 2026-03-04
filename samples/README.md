@@ -42,10 +42,10 @@ Navigate to the desired project folder and use the Rio CLI:
 cd rio_showcase_mvc  # or rio_showcase_api
 
 # 2. Setup the database (Migrations + Seeds)
-../../bin/rio db:setup
+rio db:setup
 
 # 3. Start the server
-../../bin/rio server
+rio server
 ```
 
 ## Learning Path
