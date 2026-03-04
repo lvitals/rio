@@ -25,7 +25,7 @@ local etl_utils = require("rio.utils.etl")
 local Rio = {
     -- Framework version
     VERSION = "0.1.3",
-    
+
     -- Create a new application
     new = Server.new,
     

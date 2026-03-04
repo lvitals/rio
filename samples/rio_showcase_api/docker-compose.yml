@@ -10,6 +10,8 @@ services:
     volumes:
       - ./db:/app/db
       - ./tmp:/app/tmp
+    tty: true
+    stdin_open: true
     restart: unless-stopped
 
   gateway:
