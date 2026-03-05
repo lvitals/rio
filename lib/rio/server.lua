@@ -157,15 +157,15 @@ function Server:_process_request(adapter)
         if h and adapter.websocket_upgrade then return adapter:websocket_upgrade(h, ctx) end
     end
     local function run()
-        local idx = 1
+        local index = 1
         local function nxt()
-            if idx > #self.middlewares then
+            if index > #self.middlewares then
                 local h, params, rp = self.router:match(ctx.method, ctx.path)
                 if not h then return ctx:text("Not Found", 404) end
                 ctx.route = rp; for k, v in pairs(params) do ctx.params[k] = v end
                 return h(ctx)
             end
-            local m = self.middlewares[idx]; idx = idx + 1; return m.handler(ctx, nxt)
+            local m = self.middlewares[index]; index = index + 1; return m.handler(ctx, nxt)
         end
         return nxt()
     end
@@ -181,6 +181,11 @@ function Server:_process_request(adapter)
     elseif type(res) == "string" then ctx:text(res) end
 end
 
+function Server:handle_ngx()
+    local adapter = require("rio.core.adapters.openresty").new()
+    return self:_process_request(adapter)
+end
+
 function Server:listen(port, host)
     local h = host or "0.0.0.0"; local p = port or 8080
     local ok, inst = pcall(compat.http_server.listen, {
@@ -193,10 +198,22 @@ function Server:listen(port, host)
     return true
 end
 
+function Server:bootstrap()
+    local ok_db, db_config = pcall(require, "config.database")
+    if ok_db then
+        local env = os.getenv("RIO_ENV") or self.config.environment or "development"
+        if db_config[env] then require("rio.database.manager").initialize(db_config[env]) end
+    end
+    local ok_mw, mw_cfg = pcall(require, "config.middlewares")
+    if ok_mw then for _, m in ipairs(mw_cfg) do self:use(m) end end
+    local ok_routes, routes_fn = pcall(require, "config.routes")
+    if ok_routes then routes_fn(self) end
+    return self
+end
+
 function Server:run(port, host)
     local cwd = os.getenv("PWD") or "."; package.path = cwd .. "/?.lua;" .. cwd .. "/?/init.lua;" .. package.path
-    pcall(function() local mw = require("config.middlewares"); if type(mw) == "table" then for _, m in ipairs(mw) do self:use(m) end end end)
-    pcall(function() require("config.routes")(self) end)
+    self:bootstrap()
     return self:listen(port, host)
 end
 

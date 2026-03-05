@@ -3,8 +3,8 @@ version: '3.8'
 services:
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: samples/rio_openresty_mvc/Dockerfile
     ports:
       - "8080:80"
     volumes:
