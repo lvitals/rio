@@ -1,0 +1,47 @@
+-- config/database.lua
+-- Database configurations for the Rio framework.
+-- No database adapter selected.
+-- To enable a database, uncomment and configure one of the examples below,
+-- or run 'rio new <project_name> --database=<adapter>'.
+-- Or simply run 'rio db:setup' to configure it interactively.
+--
+-- Example for SQLite:
+-- return {
+--     development = {
+--         adapter = "sqlite",
+--         database = "db/development.sqlite3"
+--     },
+--     test = {
+--         adapter = "sqlite",
+--         database = "db/test.sqlite3"
+--     },
+--     production = {
+--         adapter = "sqlite",
+--         database = "db/production.sqlite3"
+--     }
+-- }
+--
+-- Example for PostgreSQL:
+-- return {
+--     development = {
+--         adapter = "postgres",
+--         host = "localhost",
+--         port = 5432,
+--         username = "rio_dev",
+--         password = "password",
+--         database = "rio_chat_development"
+--     }
+-- }
+--
+-- Example for MySQL:
+-- return {
+--     development = {
+--         adapter = "mysql",
+--         host = "127.0.0.1",
+--         port = 3306,
+--         username = "root",
+--         password = "password",
+--         database = "rio_chat_development"
+--     }
+-- }
+return {}

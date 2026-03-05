@@ -42,13 +42,15 @@ function M.new(adapter, config)
     ctx.res = ctx
     
     function ctx:setHeader(key, value)
+        -- HTTP/2 requires lowercase headers
+        local k = string.lower(key)
         if self.response_headers.upsert then
-            self.response_headers:upsert(key, value)
+            self.response_headers:upsert(k, value)
         elseif self.response_headers.set then
-            self.response_headers:set(key, value)
+            self.response_headers:set(k, value)
         else
             -- Fallback to append if no better method exists
-            self.response_headers:append(key, value)
+            self.response_headers:append(k, value)
         end
     end
 
@@ -61,7 +63,7 @@ function M.new(adapter, config)
         if options.http_only then cookie = cookie .. "; HttpOnly" end
         if options.secure then cookie = cookie .. "; Secure" end
         if options.same_site then cookie = cookie .. "; SameSite=" .. options.same_site end
-        self:setHeader("Set-Cookie", cookie)
+        self:setHeader("set-cookie", cookie)
     end
 
     function ctx:getCookie(name)
@@ -96,7 +98,7 @@ function M.new(adapter, config)
     end
     
     function ctx:redirect(location, status)
-        self:setHeader("Location", location)
+        self:setHeader("location", location)
         return response.redirect(self.adapter, status or 302, self.response_headers)
     end
 

@@ -40,6 +40,7 @@ build = {
       ["rio.core.adapters.standalone"] = "lib/rio/core/adapters/standalone.lua",
       ["rio.core.adapters.openresty"] = "lib/rio/core/adapters/openresty.lua",
       ["rio.auth"] = "lib/rio/auth.lua",
+      ["rio.cable"] = "lib/rio/cable.lua",
       ["rio.cli"] = "lib/rio/cli.lua",
       ["rio.core.context"] = "lib/rio/core/context.lua",
       ["rio.core.response"] = "lib/rio/core/response.lua",

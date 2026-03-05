@@ -1,0 +1,5 @@
+-- db/seeds.lua
+-- This file is used to seed the database with initial data.
+-- Example:
+-- local Product = require("app.models.product")
+-- Product:create({ name = "Default Product", price = 100 })

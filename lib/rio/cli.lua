@@ -359,6 +359,43 @@ rio_tests.setup()
 end
 
 -- Generator functions
+local function generate_channel(channel_name)
+    local underscored_name = underscore(channel_name)
+    local channel_path = "app/channels/" .. underscored_name .. "_channel.lua"
+    local camel_name = camel_case(channel_name)
+    
+    create_dir_if_not_exists("app/channels")
+    print("Generating WebSocket channel: " .. channel_path)
+    
+    local content = {
+        "local " .. camel_name .. "Channel = {}",
+        "",
+        "function " .. camel_name .. "Channel:subscribed()",
+        "    -- self:stream_from(\"chat_room\")",
+        "end",
+        "",
+        "function " .. camel_name .. "Channel:speak(data)",
+        "    -- require(\"rio\").broadcast(\"chat_room\", { message = data.message })",
+        "end",
+        "",
+        "return " .. camel_name .. "Channel"
+    }
+    write_file_content(channel_path, table.concat(content, "\n"))
+
+    local routes_file = "config/routes.lua"
+    local f = io.open(routes_file, "r")
+    if f then
+        local routes_content = f:read("*a")
+        f:close()
+        local ws_route = "    app:ws(\"/cable/" .. underscored_name .. "\", \"" .. camel_name .. "Channel\")"
+        if not routes_content:find(ws_route, 1, true) then
+            local modified = routes_content:gsub("(.-)end%s*$", "%1" .. ws_route .. "\nend")
+            write_file_content(routes_file, modified)
+            print("WebSocket route added to config/routes.lua: /cable/" .. underscored_name)
+        end
+    end
+end
+
 local function generate_controller(controller_name, actions, api_only)
     local path = "app/controllers/" .. underscore(controller_name) .. "_controller.lua"
     print("Generating controller: " .. path .. (api_only and " (API-only)" or ""))
@@ -3239,6 +3276,7 @@ local function show_generate_help()
     print("")
     print("Available generators:")
     print("  generate controller <name> [action1 action2...] - Generates a new controller.")
+    print("  generate channel <name> - Generates a WebSocket channel.")
     print("  generate model <name> [field1:type field2:type...] - Generates a new model and migration.")
     print("  generate migration <name> [field1:type field2:type...] - Generates a new migration.")
     print("  generate resource <name> [field1:type field2:type...] - Generates a new model, migration, controller, and routes.")
@@ -3783,6 +3821,8 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
 
         if generator_type == "controller" then
             generate_controller(generator_name, generator_params, api_only)
+        elseif generator_type == "channel" then
+            generate_channel(generator_name)
         elseif generator_type == "model" then
             generate_model(generator_name, generator_params)
         elseif generator_type == "migration" then

@@ -14,6 +14,7 @@ local openapi = require("rio.middleware.openapi")
 -- Core
 local response = require("rio.core.response")
 local cache = require("rio.cache")
+local cable = require("rio.cable")
 
 -- Utils
 local string_utils = require("rio.utils.string")
@@ -44,6 +45,10 @@ local Rio = {
     
     -- Cache system
     cache = cache,
+
+    -- Action Cable-like system
+    cable = cable,
+    broadcast = cable.broadcast,
     
     -- Core utilities
     response = response,

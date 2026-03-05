@@ -1,4 +1,4 @@
--- rio/utils/headers.lua
+-- rio/lib/rio/utils/headers.lua
 -- Utilities for handling HTTP headers.
 
 local string_utils = require("rio.utils.string")
@@ -27,27 +27,19 @@ function M.set_security_headers(headers, config)
     if not headers or type(headers) ~= "table" then return end
     config = config or {}
     
-    -- Prevent browsers from sniffing MIME types away from the declared content-type.
-    headers:upsert("X-Content-Type-Options", "nosniff")
+    -- IMPORTANT: Header names MUST be lowercase for HTTP/2 (lua-http)
+    headers:upsert("x-content-type-options", "nosniff")
+    headers:upsert("x-frame-options", config.frame_options or "SAMEORIGIN")
+    headers:upsert("x-xss-protection", "1; mode=block")
+    headers:upsert("referrer-policy", config.referrer_policy or "strict-origin-when-cross-origin")
     
-    -- Prevent page from being embedded in frames/iframes on other sites.
-    headers:upsert("X-Frame-Options", config.frame_options or "SAMEORIGIN")
-    
-    -- Enable browser XSS filtering (legacy, but still useful).
-    headers:upsert("X-XSS-Protection", "1; mode=block")
-    
-    -- Control how much referrer information is sent with requests.
-    headers:upsert("Referrer-Policy", config.referrer_policy or "strict-origin-when-cross-origin")
-    
-    -- Content Security Policy (CSP)
-    -- Default is very strict, but can be extended via config.csp
     local csp = config.csp or "default-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'self'"
-    headers:upsert("Content-Security-Policy", csp)
+    headers:upsert("content-security-policy", csp)
 
     -- Custom Headers from configuration
     if config.headers and type(config.headers) == "table" then
         for k, v in pairs(config.headers) do
-            headers:upsert(k, tostring(v))
+            headers:upsert(k:lower(), tostring(v))
         end
     end
 end
