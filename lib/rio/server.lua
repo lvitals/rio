@@ -32,21 +32,42 @@ function Server.new(config)
 end
 
 function Server:use(middleware, options)
-    local h = nil; local n = "anonymous"
+    local h = nil
     if type(middleware) == "string" then
-        n = middleware; local rio = require("rio"); local cmw = rio.middleware[middleware]
-        if cmw then
-            if type(cmw) == "table" then
-                if cmw.basic then h = cmw.basic()
-                elseif cmw.headers then h = cmw.headers()
-                elseif cmw.create then h = cmw.create(self, options)
-                elseif cmw.default then h = cmw.default() end
-            else h = cmw end
-        end
-        if not h then local ok, lmw = pcall(require, "app.middleware." .. middleware); if ok then h = lmw end end
-    elseif type(middleware) == "function" then h = middleware end
-    if h then table.insert(self.middlewares, { handler = h, name = n }) end
+        local rio = require("rio")
+        h = rio.middleware[middleware] or require("app.middleware." .. middleware)
+    else
+        h = middleware
+    end
+
+    -- Extract functional handler from middleware table/factory
+    if type(h) == "table" then
+        if h.basic then h = h.basic()
+        elseif h.headers then h = h.headers()
+        elseif h.create then h = h.create(self, options)
+        elseif h.default then h = h.default() end
+    end
+
+    if type(h) == "function" then
+        table.insert(self.middlewares, h)
+    end
     return self
+end
+
+function Server:wrap(handler, ...)
+    local local_mws = {...}
+    local final_h = self:_to_handler(handler)
+    if #local_mws == 0 then return final_h end
+    
+    return function(ctx)
+        local idx = 1
+        local function nxt()
+            if idx > #local_mws then return final_h(ctx) end
+            local mw = local_mws[idx]; idx = idx + 1
+            return mw(ctx, nxt)
+        end
+        return nxt()
+    end
 end
 
 function Server:_to_handler(handler)
@@ -67,20 +88,19 @@ function Server:_to_handler(handler)
                 local mod_name = string_utils.underscore(handler)
                 if not mod_name:find("_channel$") then mod_name = mod_name .. "_channel" end
                 
-                local ok, Channel = pcall(require, "app.channels." .. mod_name)
+                local ok, Chan = pcall(require, "app.channels." .. mod_name)
                 if not ok then 
-                    io.stderr:write("Could not load channel: " .. mod_name .. " (" .. tostring(Channel) .. ")\n")
+                    io.stderr:write("Channel Load Error: " .. tostring(Chan) .. "\n")
                     return wb:send_close() 
                 end
                 
-                local inst = setmetatable({ wb = wb, ctx = ctx, _unsubs = {} }, { __index = Channel })
+                local inst = setmetatable({ wb = wb, ctx = ctx, _unsubs = {} }, { __index = Chan })
                 function inst:stream_from(name)
                     local un = require("rio.cable").subscribe(name, wb)
                     table.insert(self._unsubs, un)
                 end
                 
                 if inst.subscribed then pcall(inst.subscribed, inst) end
-                
                 while true do
                     local d, t = wb:recv_frame()
                     if not d then break end
@@ -89,7 +109,6 @@ function Server:_to_handler(handler)
                         if ok_j and m.action and inst[m.action] then pcall(inst[m.action], inst, m.data) end
                     elseif t == "close" then break end
                 end
-                
                 if inst.unsubscribed then pcall(inst.unsubscribed, inst) end
                 for _, u in ipairs(inst._unsubs) do pcall(u) end
                 return wb:send_close()
@@ -107,30 +126,45 @@ function Server:delete(p, h) self.router:add_route("DELETE", p, self:_to_handler
 function Server:ws(p, h) self.router:add_route("WS", p, self:_to_handler(h)); return self end
 
 function Server:resources(name, cn)
-    local function add(m, a, p) self[m](self, "/" .. name .. (p or ""), (cn or (name .. "_controller")) .. "@" .. a) end
-    add("get", "index"); add("post", "create"); add("get", "show", "/:id")
+    local controller = cn or (name .. "_controller")
+    local function add(m, a, p) self[m](self, "/" .. name .. (p or ""), controller .. "@" .. a) end
+    add("get", "index"); add("get", "new", "/new"); add("post", "create")
+    add("get", "show", "/:id"); add("get", "edit", "/:id/edit")
     add("put", "update", "/:id"); add("patch", "update", "/:id"); add("delete", "destroy", "/:id")
     return self
 end
 
 function Server:group(prefix, fn)
-    self.router:push_prefix(prefix); fn(self); self.router:pop_prefix(); return self
+    local proxy = setmetatable({
+        _middlewares = {},
+        use = function(s, mw) table.insert(s._middlewares, mw); return s end,
+        get = function(s, p, h) self:get(prefix .. p, self:wrap(h, compat.unpack(s._middlewares))); return s end,
+        post = function(s, p, h) self:post(prefix .. p, self:wrap(h, compat.unpack(s._middlewares))); return s end,
+        put = function(s, p, h) self:put(prefix .. p, self:wrap(h, compat.unpack(s._middlewares))); return s end,
+        patch = function(s, p, h) self:patch(prefix .. p, self:wrap(h, compat.unpack(s._middlewares))); return s end,
+        delete = function(s, p, h) self:delete(prefix .. p, self:wrap(h, compat.unpack(s._middlewares))); return s end,
+        resources = function(s, name, cn)
+            local ctrl = cn or (name .. "_controller")
+            local function add(m, a, p) s[m](s, "/" .. name .. (p or ""), ctrl .. "@" .. a) end
+            add("get", "index"); add("get", "new", "/new"); add("post", "create")
+            add("get", "show", "/:id"); add("get", "edit", "/:id/edit")
+            add("put", "update", "/:id"); add("patch", "update", "/:id"); add("delete", "destroy", "/:id")
+            return s
+        end
+    }, { __index = self })
+    fn(proxy)
+    return self
 end
 
 function Server:_process_request(adapter)
     require("rio.database.manager").clear_query_cache()
     local ctx = context_lib.new(adapter, self.config); ctx.app = self
-    local start_time = os.clock()
-    
     local upgrade = ctx:getHeader("upgrade")
     if upgrade and upgrade:lower() == "websocket" then
         local h = self.router:match("WS", ctx.path)
-        if h and adapter.websocket_upgrade then 
-            if os.getenv("RIO_DEBUG") then print(string.format("%s[WS]%s %s", c.cyan, c.reset, ctx.path)) end
-            return adapter:websocket_upgrade(h, ctx) 
-        end
+        if h and adapter.websocket_upgrade then return adapter:websocket_upgrade(h, ctx) end
     end
-
+    
     local function run_handler()
         local index = 1
         local function next_mw()
@@ -140,20 +174,27 @@ function Server:_process_request(adapter)
                 ctx.route = rp; for k, v in pairs(params) do ctx.params[k] = v end
                 return h(ctx)
             end
-            local mw = self.middlewares[index]; index = index + 1; return mw.handler(ctx, next_mw)
+            local mw = self.middlewares[index]; index = index + 1
+            return mw(ctx, next_mw)
         end
         return next_mw()
     end
 
     context_lib.set_body(ctx, adapter:get_body())
-    local ok, res = pcall(run_handler)
     
-    if not ok then 
-        io.stderr:write(c.red .. "Internal Error: " .. tostring(res) .. c.reset .. "\n")
-        ctx:text("Internal Error", 500)
-    elseif type(res) == "string" then 
-        ctx:text(res) 
+    -- Method Override Support
+    if ctx.method == "POST" then
+        local overriden = nil
+        if ctx.body and ctx.body._method then overriden = tostring(ctx.body._method):upper()
+        elseif ctx.query and ctx.query._method then overriden = tostring(ctx.query._method):upper() end
+        if overriden == "PUT" or overriden == "PATCH" or overriden == "DELETE" then
+            ctx.method = overriden
+        end
     end
+
+    local ok, res = pcall(run_handler)
+    if not ok then io.stderr:write(c.red .. "Internal Error: " .. tostring(res) .. c.reset .. "\n"); ctx:text("Internal Error", 500)
+    elseif type(res) == "string" then ctx:text(res) end
 end
 
 function Server:listen(port, host)
