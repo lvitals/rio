@@ -142,6 +142,12 @@
   <dt id="initializers"><a class="permalink" href="#initializers"><code class="Cm">initializers</code></a></dt>
   <dd>Lists the order in which the application's initialization scripts are
       loaded.</dd>
+  <dt id="scaffold"><a class="permalink" href="#scaffold"><code class="Cm">scaffold</code></a>
+    <var class="Ar">Name</var> [<var class="Ar">fields</var>]</dt>
+  <dd>Alias for <code class="Cm">generate scaffold</code>.</dd>
+  <dt id="resource"><a class="permalink" href="#resource"><code class="Cm">resource</code></a>
+    <var class="Ar">Name</var> [<var class="Ar">fields</var>]</dt>
+  <dd>Alias for <code class="Cm">generate resource</code>.</dd>
   <dt id="help"><a class="permalink" href="#help"><code class="Cm">help</code></a>
     [<var class="Ar">command</var> [<var class="Ar">subcommand</var>]]</dt>
   <dd>Displays help for a command or a specific subcommand.</dd>
@@ -153,36 +159,35 @@
 <p class="Pp">Generators create boilerplate code, while destructors remove
   it.</p>
 <dl class="Bl-tag">
-  <dt id="generate"><a class="permalink" href="#generate"><code class="Cm">generate</code></a>
-    | <a class="permalink" href="#destroy"><code class="Cm" id="destroy">destroy
+  <dt id="generate"><a class="permalink" href="#generate"><code class="Cm">generate
     scaffold</code></a> <var class="Ar">Name</var>
     [<var class="Ar">fields</var>]</dt>
-  <dd>Creates or removes a full CRUD (Model, Migration, Controller, Views,
-      Tests, and Routes).</dd>
-  <dt id="generate~2"><a class="permalink" href="#generate~2"><code class="Cm">generate</code></a>
-    |
-    <a class="permalink" href="#destroy~2"><code class="Cm" id="destroy~2">destroy
+  <dd>Creates a full CRUD (Model, Migration, Controller, Views, Tests, and
+      Routes).</dd>
+  <dt id="generate~2"><a class="permalink" href="#generate~2"><code class="Cm">generate
+    resource</code></a> <var class="Ar">Name</var>
+    [<var class="Ar">fields</var>]</dt>
+  <dd>Creates a scaffold without the Views.</dd>
+  <dt id="generate~3"><a class="permalink" href="#generate~3"><code class="Cm">generate</code></a>
+    | <a class="permalink" href="#destroy"><code class="Cm" id="destroy">destroy
     model</code></a> <var class="Ar">Name</var>
     [<var class="Ar">fields</var>]</dt>
   <dd>Creates or removes a Model and its corresponding Migration.</dd>
-  <dt id="generate~3"><a class="permalink" href="#generate~3"><code class="Cm">generate</code></a>
+  <dt id="generate~4"><a class="permalink" href="#generate~4"><code class="Cm">generate</code></a>
     |
-    <a class="permalink" href="#destroy~3"><code class="Cm" id="destroy~3">destroy
+    <a class="permalink" href="#destroy~2"><code class="Cm" id="destroy~2">destroy
     migration</code></a> <var class="Ar">Name</var>
     [<var class="Ar">fields</var>]</dt>
   <dd>Creates or removes a database migration file.</dd>
-  <dt id="generate~4"><a class="permalink" href="#generate~4"><code class="Cm">generate</code></a>
+  <dt id="generate~5"><a class="permalink" href="#generate~5"><code class="Cm">generate</code></a>
     |
-    <a class="permalink" href="#destroy~4"><code class="Cm" id="destroy~4">destroy
+    <a class="permalink" href="#destroy~3"><code class="Cm" id="destroy~3">destroy
     controller</code></a> <var class="Ar">Name</var>
     [<var class="Ar">actions</var>]</dt>
   <dd>Creates or removes a Controller and its corresponding Tests.</dd>
-  <dt id="generate~5"><a class="permalink" href="#generate~5"><code class="Cm">generate</code></a>
-    |
-    <a class="permalink" href="#destroy~5"><code class="Cm" id="destroy~5">destroy
-    resource</code></a> <var class="Ar">Name</var>
-    [<var class="Ar">fields</var>]</dt>
-  <dd>Creates or removes a scaffold without the Views.</dd>
+  <dt id="generate~6"><a class="permalink" href="#generate~6"><code class="Cm">generate
+    channel</code></a> <var class="Ar">Name</var></dt>
+  <dd>Creates a WebSocket channel and adds its route.</dd>
 </dl>
 <p class="Pp">Fields are defined as <var class="Ar">name:type{options}</var>.
     Available types: <var class="Ar">string</var>, <var class="Ar">text</var>,
@@ -394,7 +399,7 @@
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">March 3, 2026</td>
+    <td class="foot-date">March 5, 2026</td>
     <td class="foot-os">Linux 6.18.13-arch1-1</td>
   </tr>
 </table>

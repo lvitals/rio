@@ -129,6 +129,16 @@ template engine (ETL), and the caching system.
 
 > Lists the order in which the application's initialization scripts are loaded.
 
+**scaffold** *Name* \[*fields*]
+
+> Alias for
+> **generate scaffold**.
+
+**resource** *Name* \[*fields*]
+
+> Alias for
+> **generate resource**.
+
 **help** \[*command* \[*subcommand*]]
 
 > Displays help for a command or a specific subcommand.
@@ -137,9 +147,13 @@ template engine (ETL), and the caching system.
 
 Generators create boilerplate code, while destructors remove it.
 
-**generate** | **destroy scaffold** *Name* \[*fields*]
+**generate scaffold** *Name* \[*fields*]
 
-> Creates or removes a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
+> Creates a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
+
+**generate resource** *Name* \[*fields*]
+
+> Creates a scaffold without the Views.
 
 **generate** | **destroy model** *Name* \[*fields*]
 
@@ -153,9 +167,9 @@ Generators create boilerplate code, while destructors remove it.
 
 > Creates or removes a Controller and its corresponding Tests.
 
-**generate** | **destroy resource** *Name* \[*fields*]
+**generate channel** *Name*
 
-> Creates or removes a scaffold without the Views.
+> Creates a WebSocket channel and adds its route.
 
 Fields are defined as
 *name:type{options}*.
@@ -391,4 +405,4 @@ The Rio Framework Team.
 
 Report bugs at the official repository.
 
-Linux 6.18.13-arch1-1 - March 3, 2026
+Linux 6.18.13-arch1-1 - March 5, 2026

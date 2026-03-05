@@ -1,4 +1,4 @@
-.Dd March 3, 2026
+.Dd March 5, 2026
 .Dt RIO 1
 .Os
 .Sh NAME
@@ -93,22 +93,30 @@ Displays system information, versions, and database status.
 Shows project statistics (LOC, methods, Modules, and code-to-test ratio).
 .It Cm initializers
 Lists the order in which the application's initialization scripts are loaded.
+.It Cm scaffold Ar Name Op Ar fields
+Alias for
+.Cm generate scaffold .
+.It Cm resource Ar Name Op Ar fields
+Alias for
+.Cm generate resource .
 .It Cm help Op Ar command Op Ar subcommand
 Displays help for a command or a specific subcommand.
 .El
 .Sh GENERATORS AND DESTRUCTORS
 Generators create boilerplate code, while destructors remove it.
 .Bl -tag -width "generate scaffold"
-.It Cm generate | destroy scaffold Ar Name Op Ar fields
-Creates or removes a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
+.It Cm generate scaffold Ar Name Op Ar fields
+Creates a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
+.It Cm generate resource Ar Name Op Ar fields
+Creates a scaffold without the Views.
 .It Cm generate | destroy model Ar Name Op Ar fields
 Creates or removes a Model and its corresponding Migration.
 .It Cm generate | destroy migration Ar Name Op Ar fields
 Creates or removes a database migration file.
 .It Cm generate | destroy controller Ar Name Op Ar actions
 Creates or removes a Controller and its corresponding Tests.
-.It Cm generate | destroy resource Ar Name Op Ar fields
-Creates or removes a scaffold without the Views.
+.It Cm generate channel Ar Name
+Creates a WebSocket channel and adds its route.
 .El
 .Pp
 Fields are defined as
