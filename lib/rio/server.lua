@@ -187,7 +187,8 @@ function Server:handle_ngx()
 end
 
 function Server:listen(port, host)
-    local h = host or "0.0.0.0"; local p = port or 8080
+    local h = host or os.getenv("RIO_BINDING") or (self.config.server and self.config.server.host) or "0.0.0.0"
+    local p = tonumber(port or os.getenv("RIO_PORT") or (self.config.server and self.config.server.port)) or 8080
     local ok, inst = pcall(compat.http_server.listen, {
         host = h, port = p, reuseaddr = true,
         onstream = function(_, stream) self:_process_request(require("rio.core.adapters.standalone").new(stream)) end
