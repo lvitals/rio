@@ -23,9 +23,24 @@ M.lua_version = tonumber(version)
 
 -- Returns the current Lua binary path or command
 function M.get_lua_bin()
-    -- If running under a LuaRocks wrapper, arg[-1] might contain a complex string.
-    -- We want the actual Lua executable.
-    local bin = arg and arg[-1] or "lua"
+    -- Start with arg[-1] but try to find the lowest negative index in arg table, 
+    -- skipping common Lua flags (-e, -v, -l, etc.) and wrappers to find the real interpreter.
+    local bin = "lua"
+    if arg then
+        local i = -1
+        while arg[i-1] do i = i - 1 end
+        
+        -- Search from the lowest index upwards to find the first non-flag argument
+        -- which should be the Lua interpreter.
+        local current = i
+        while arg[current] and (arg[current]:match("^%-") or arg[current] == "luarocks" or arg[current] == "rock") do
+            current = current + 1
+        end
+        bin = arg[current] or "lua"
+    end
+    
+    -- DEBUG: Trace binary detection
+    -- io.stderr:write("DEBUG: Detected bin: " .. tostring(bin) .. "\n")
     
     -- If the binary name looks like a complex path or contains suspicious characters
     -- (like code from a wrapper), we fallback to a version-specific binary name.
@@ -39,7 +54,10 @@ function M.get_lua_bin()
             if handle then
                 local res = handle:read("*a")
                 handle:close()
-                if res and res ~= "" then return cmd end
+                -- Only use it if it's not a generic "not found" message
+                if res and res ~= "" and not res:lower():find("not found") then 
+                    return cmd 
+                end
             end
         end
         return "lua"

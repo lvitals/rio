@@ -1,8 +1,8 @@
 package = "rio"
-version = "0.1.6-1"
+version = "0.1.7-1"
 source = {
    url = "git://github.com/lvitals/rio",
-   tag = "v0.1.6"
+   tag = "v0.1.7"
 }
 
 description = {
