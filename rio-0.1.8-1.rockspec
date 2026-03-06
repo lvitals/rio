@@ -1,8 +1,8 @@
 package = "rio"
-version = "0.1.7-1"
+version = "0.1.8-1"
 source = {
    url = "git://github.com/lvitals/rio",
-   tag = "v0.1.7"
+   tag = "v0.1.8"
 }
 
 description = {
@@ -53,6 +53,7 @@ build = {
       ["rio.cache.adapters.file"] = "lib/rio/cache/adapters/file.lua",
       ["rio.cache.adapters.memory"] = "lib/rio/cache/adapters/memory.lua",
       ["rio.cache.adapters.null"] = "lib/rio/cache/adapters/null.lua",
+      ["rio.cable"] = "lib/rio/cable.lua",
       ["rio.core.adapters.standalone"] = "lib/rio/core/adapters/standalone.lua",
       ["rio.core.adapters.openresty"] = "lib/rio/core/adapters/openresty.lua",
       ["rio.auth"] = "lib/rio/auth.lua",
