@@ -308,7 +308,12 @@ else
                         if clen and clen > 0 then body = client:receive(clen) end
                         local stream = {
                             headers_sent = false,
-                            get_headers = function() return create_header_obj({ [":method"] = method, [":path"] = full_path }) end,
+                            get_headers = function()
+                                local h = create_header_obj(req_headers)
+                                h:upsert(":method", method)
+                                h:upsert(":path", full_path)
+                                return h
+                            end,
                             write_headers = function(self, h)
                                 self.headers_sent = true
                                 client:send("HTTP/1.1 " .. (h:get(":status") or "200") .. " OK\r\n")
