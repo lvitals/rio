@@ -32,7 +32,16 @@ function M.get_lua_bin()
     if bin:find("[%(%);]") or #bin > 256 then
         if jit and jit.version then return "luajit" end
         local ver = _VERSION:match("Lua (%d%.%d)")
-        if ver then return "lua" .. ver end
+        if ver then
+            local cmd = "lua" .. ver
+            -- Check if the versioned command exists in the PATH
+            local handle = io.popen("command -v " .. cmd .. " 2>/dev/null")
+            if handle then
+                local res = handle:read("*a")
+                handle:close()
+                if res and res ~= "" then return cmd end
+            end
+        end
         return "lua"
     end
     
