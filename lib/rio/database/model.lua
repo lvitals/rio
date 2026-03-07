@@ -109,10 +109,15 @@ function Model:new(attributes)
     }
     setmetatable(instance, {
         __index = function(t, k)
-            local class_val = ModelClass[k]
-            if class_val ~= nil then return class_val end
+            -- Attributes from DB first (prevents shadowing by scopes)
             local attr_val = t._attributes[k]
             if attr_val ~= nil then return attr_val end
+
+            -- Methods from Class
+            local class_val = ModelClass[k]
+            if class_val ~= nil then return class_val end
+            
+            -- Lazy load relations
             local rel_entry = ModelClass._relations and ModelClass._relations[k]
             if rel_entry and rel_entry.fn then
                 if not t._relations_loaded[k] then t._relations_loaded[k] = rel_entry.fn(t) end
@@ -309,6 +314,7 @@ function Model:_update()
     if self.timestamps then self.updated_at = os.date("%Y-%m-%d %H:%M:%S") end
     local id = self[self.primary_key or "id"]
     local data = self:_filterAttributes(self._attributes); data[self.primary_key or "id"] = nil
+    
     if self:query():where(self.primary_key or "id", id):update(data) then
         self._original = self:_copy(self._attributes); if self.after_update then self.after_update(self) end
         return true
