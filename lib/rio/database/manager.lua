@@ -177,6 +177,17 @@ local function wrap_adapter_call(method_name, ...)
 
     local res, err = active_adapter[method_name](...)
     if not res and err then
+        local sql, bindings = ...
+        if sql then
+            print(string.format("%s-- DATABASE ERROR QUERY --%s", "\27[31m", "\27[0m"))
+            print("SQL: " .. tostring(sql))
+            if bindings and type(bindings) == "table" and #bindings > 0 then
+                local b_strs = {}
+                for i, v in ipairs(bindings) do table.insert(b_strs, tostring(v)) end
+                print("Bindings: [" .. table.concat(b_strs, ", ") .. "]")
+            end
+            print(string.rep("-", 40))
+        end
         return nil, format_error_obj(err)
     end
     return res

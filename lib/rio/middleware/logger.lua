@@ -50,6 +50,10 @@ function M.basic()
               duration))
         
         if not ok then
+            -- Print the error to console
+            print(string.format("%s-- RIO ERROR --%s", colors.red, colors.reset))
+            print(tostring(result))
+            print(string.rep("-", 40))
             error(result) -- Re-raise if next() failed
         end
         return result

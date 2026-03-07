@@ -143,14 +143,20 @@ function QueryBuilder:_buildWhere(wheres_list)
     local where_clauses = {}
     for i, w in ipairs(target) do
         local clause
-        local boolean_type = (i == 1 and "" or w.type .. " ")
+        local type_val = w.type or "AND"
+        local boolean_type = (i == 1 and "" or type_val .. " ")
         if w.nested then clause = "(" .. self:_buildWhere(w.nested) .. ")"
         elseif w.raw then clause = w.raw
         elseif w.operator == "IN" then
-            local vs = {}; for _, v in ipairs(w.value) do table.insert(vs, self:_escapeValue(v)) end
-            clause = string.format("%s IN (%s)", w.column, table.concat(vs, ", "))
-        elseif w.operator == "IS NULL" or w.operator == "IS NOT NULL" then clause = string.format("%s %s", w.column, w.operator)
-        else clause = string.format("%s %s %s", w.column, w.operator, self:_escapeValue(w.value)) end
+            local vs = {}; for _, v in ipairs(w.value or {}) do table.insert(vs, self:_escapeValue(v)) end
+            clause = string.format("%s IN (%s)", tostring(w.column or "id"), table.concat(vs, ", "))
+        elseif w.operator == "IS NULL" or w.operator == "IS NOT NULL" then clause = string.format("%s %s", tostring(w.column or "id"), w.operator)
+        else 
+            local col = tostring(w.column or "id")
+            local op = tostring(w.operator or "=")
+            local val = self:_escapeValue(w.value)
+            clause = string.format("%s %s %s", col, op, val)
+        end
         table.insert(where_clauses, boolean_type .. clause)
     end
     local final = table.concat(where_clauses, " ")
