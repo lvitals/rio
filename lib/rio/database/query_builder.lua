@@ -125,6 +125,9 @@ function QueryBuilder:whereIn(column, values) table.insert(self._wheres, { colum
 function QueryBuilder:whereNull(column) table.insert(self._wheres, { column = column, operator = "IS NULL", value = nil, type = "AND" }); return self end
 function QueryBuilder:whereNotNull(column) table.insert(self._wheres, { column = column, operator = "IS NOT NULL", value = nil, type = "AND" }); return self end
 
+function QueryBuilder:orWhereNull(column) table.insert(self._wheres, { column = column, operator = "IS NULL", value = nil, type = "OR" }); return self end
+function QueryBuilder:orWhereNotNull(column) table.insert(self._wheres, { column = column, operator = "IS NOT NULL", value = nil, type = "OR" }); return self end
+
 function QueryBuilder:join(tbl, f, op, s) if not s then s = op; op = "=" end; table.insert(self._joins, { type = "INNER", table = tbl, first = f, operator = op, second = s }); return self end
 function QueryBuilder:leftJoin(tbl, f, op, s) if not s then s = op; op = "=" end; table.insert(self._joins, { type = "LEFT", table = tbl, first = f, operator = op, second = s }); return self end
 function QueryBuilder:orderBy(column, direction) table.insert(self._orderBy, { column = column, direction = direction or "ASC" }); return self end
