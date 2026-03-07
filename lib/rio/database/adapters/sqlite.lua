@@ -54,6 +54,20 @@ function SQLiteAdapter.escape_value(value)
     return "'" .. tostring(value):gsub("'", "''") .. "'"
 end
 
+function SQLiteAdapter.parse_date(s)
+    if not s or type(s) ~= "string" then return nil end
+    local year, month, day, hour, min, sec = s:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+    if year then
+        return os.time({year=year, month=month, day=day, hour=hour, min=min, sec=sec})
+    end
+    -- Support date only
+    year, month, day = s:match("(%d+)-(%d+)-(%d+)")
+    if year then
+        return os.time({year=year, month=month, day=day})
+    end
+    return nil
+end
+
 -- Private helper to handle parameter escaping for SQLite
 local function escape_params(conn, sql, params)
     if not params or #params == 0 then return sql end
@@ -251,6 +265,7 @@ function M.get_sql_type(t, o) return get_instance():get_sql_type(t, o) end
 function M.get_table_options() return get_instance():get_table_options() end
 function M.get_timestamp_default() return get_instance():get_timestamp_default() end
 function M.escape_value(v) return get_instance().escape_value(v) end
+function M.parse_date(s) return get_instance().parse_date(s) end
 function M.ensure_migrations_table(c) return get_instance():ensure_migrations_table(c) end
 function M.get_last_batch(c) return get_instance():get_last_batch(c) end
 function M.get_executed_migrations(c) return get_instance():get_executed_migrations(c) end
