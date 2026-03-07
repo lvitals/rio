@@ -333,7 +333,7 @@ function QueryBuilder:insert(data)
     if not data or not next(data) then return nil, "No data" end
     local columns, values = {}, {}
     for k, v in pairs(data) do table.insert(columns, k); table.insert(values, self:_escapeValue(v)) end
-    local sql = string.format("INSERT INTO %s (%s) VALUES (%s)", self._table, table.concat(columns, ", "), table.concat(vals, ", "))
+    local sql = string.format("INSERT INTO %s (%s) VALUES (%s)", self._table, table.concat(columns, ", "), table.concat(values, ", "))
     return DBManager.insert(sql)
 end
 
