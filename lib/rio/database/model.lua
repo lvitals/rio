@@ -349,29 +349,34 @@ function Model:_hydrateAll(results) local instances = {}; for _, row in ipairs(r
 function Model:validate()
     self.errors:clear(); if not self.validates then return true end
     for field, rules in pairs(self.validates) do
-        local v = self[field]
-        if type(rules) == "string" then rules = { [rules] = true } end
-        if rules.presence and (v == nil or v == "" or (type(v) == "string" and v:match("^%s*$"))) then self.errors:add(field, "can't be blank") end
-        if rules.uniqueness and v then
-            local q = self:query():where(field, v); if self._exists then q:where(self.primary_key or "id", "!=", self[self.primary_key or "id"]) end
-            if q:first() then self.errors:add(field, "has already been taken") end
-        end
-        if rules.format and v then
-            local r = rules.format
-            if r.with and not tostring(v):match(r.with) then self.errors:add(field, r.message or "is invalid") end
-        end
-        if rules.length and v then
-            local len = #tostring(v); local r = rules.length
-            if r.minimum and len < r.minimum then self.errors:add(field, r.message or "is too short") end
-            if r.maximum and len > r.maximum then self.errors:add(field, r.message or "is too long") end
-        end
-        if rules.numericality and v then
-            local num = tonumber(v); local r = rules.numericality
-            if not num then self.errors:add(field, r.message or "is not a number")
-            else
-                if r.only_integer and math.floor(num) ~= num then self.errors:add(field, r.message or "must be an integer") end
-                if r.greater_than and num <= r.greater_than then self.errors:add(field, r.message or "must be greater than " .. r.greater_than) end
-                if r.less_than and num >= r.less_than then self.errors:add(field, r.message or "must be less than " .. r.less_than) end
+        -- Handle custom validation functions
+        if type(rules) == "function" then
+            rules(self)
+        else
+            local v = self[field]
+            if type(rules) == "string" then rules = { [rules] = true } end
+            if rules.presence and (v == nil or v == "" or (type(v) == "string" and v:match("^%s*$"))) then self.errors:add(field, "can't be blank") end
+            if rules.uniqueness and v then
+                local q = self:query():where(field, v); if self._exists then q:where(self.primary_key or "id", "!=", self[self.primary_key or "id"]) end
+                if q:first() then self.errors:add(field, "has already been taken") end
+            end
+            if rules.format and v then
+                local r = rules.format
+                if r.with and not tostring(v):match(r.with) then self.errors:add(field, r.message or "is invalid") end
+            end
+            if rules.length and v then
+                local len = #tostring(v); local r = rules.length
+                if r.minimum and len < r.minimum then self.errors:add(field, r.message or "is too short") end
+                if r.maximum and len > r.maximum then self.errors:add(field, r.message or "is too long") end
+            end
+            if rules.numericality and v then
+                local num = tonumber(v); local r = rules.numericality
+                if not num then self.errors:add(field, r.message or "is not a number")
+                else
+                    if r.only_integer and math.floor(num) ~= num then self.errors:add(field, r.message or "must be an integer") end
+                    if r.greater_than and num <= r.greater_than then self.errors:add(field, r.message or "must be greater than " .. r.greater_than) end
+                    if r.less_than and num >= r.less_than then self.errors:add(field, r.message or "must be less than " .. r.less_than) end
+                end
             end
         end
     end
