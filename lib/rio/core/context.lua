@@ -125,6 +125,41 @@ function M.new(adapter, config)
     return ctx
 end
 
+-- Helper to URL-decode values
+local function url_decode(str)
+    if not str then return nil end
+    str = tostring(str)
+    str = str:gsub("+", " ")
+    str = str:gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)
+    str = str:gsub("\r\n", "\n")
+    return str
+end
+
+-- Helper to set a value in a nested table using "key[nested][index]" syntax
+local function set_nested_value(t, key, value)
+    local parts = {}
+    -- Parse "key[part1][part2]"
+    local first = key:match("^([^%[]+)")
+    if first then table.insert(parts, first) end
+    for part in key:gmatch("%[([^%]]+)%]") do
+        table.insert(parts, part)
+    end
+    
+    if #parts == 0 then
+        t[key] = value
+        return
+    end
+    
+    local current = t
+    for i = 1, #parts - 1 do
+        local part = parts[i]
+        if not current[part] then current[part] = {} end
+        if type(current[part]) ~= "table" then current[part] = { _value = current[part] } end
+        current = current[part]
+    end
+    current[parts[#parts]] = value
+end
+
 -- Sets and parses the body on the context object.
 function M.set_body(ctx, raw_body)
     ctx.raw_body = raw_body
@@ -136,8 +171,17 @@ function M.set_body(ctx, raw_body)
         local ok, data = pcall(json.decode, raw_body)
         if ok then ctx.body = data end
     elseif ct:find("application/x-www-form-urlencoded", 1, true) then
-        local query_table = url.parseQuery(raw_body)
-        ctx.body = query_table or {}
+        local decoded_body = {}
+        -- Parse manually to handle nested params correctly
+        for pair in raw_body:gmatch("[^&]+") do
+            local k, v = pair:match("([^=]+)=?(.*)")
+            if k then
+                local decoded_k = url_decode(k)
+                local decoded_v = url_decode(v)
+                set_nested_value(decoded_body, decoded_k, decoded_v)
+            end
+        end
+        ctx.body = decoded_body
     end
 end
 

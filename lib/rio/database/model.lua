@@ -55,29 +55,21 @@ local function add_query_proxy(ModelClass)
         -- 1. Check Model base methods (find, all, query, belongs_to, has_many, etc.)
         if Model[k] then return Model[k] end
         
-        -- 2. Scopes Logic: Methods defined directly on the ModelClass (Scopes)
-        local member = rawget(t, k)
-        if type(member) == "function" then
+        -- 2. Check for raw members first (attributes like fillable, table_name, etc.)
+        local raw_val = rawget(t, k)
+        if raw_val ~= nil then return raw_val end
+
+        -- 3. Scopes Logic: Methods defined directly on the ModelClass (Scopes)
+        -- We already checked for raw_val, but if it was nil, it might be a function 
+        -- added later. However, Scopes are usually functions.
+        -- Let's check QueryBuilder methods specifically.
+        if type(QueryBuilder[k]) == "function" then
             return function(self, ...)
-                -- Determine if we are starting a query (called on Class) or chaining (called on Query)
-                -- mt is the metatable of the ModelClass itself.
-                local self_mt = getmetatable(self)
-                if self_mt == mt then
-                    local q = self:query()
-                    return member(self, q, ...) or q
-                end
-                -- If called on something else (like an instance), just return the original function
-                -- This prevents the "attempt to index a string value" error in logger or elsewhere
-                return member
+                local q = (getmetatable(self) == mt) and self:query() or self
+                return q[k](q, ...)
             end
         end
         
-        -- 3. QueryBuilder methods proxy
-        if QueryBuilder[k] then
-            return function(self, ...)
-                return self:query()[k](self:query(), ...)
-            end
-        end
         return nil
     end
 end
@@ -354,6 +346,7 @@ function Model:create(attributes)
 end
 
 function Model:update(attrs)
+    if type(attrs) ~= "table" then return false, "Attributes must be a table" end
     for k, v in pairs(attrs) do self._attributes[k] = v end
     return self:save()
 end
