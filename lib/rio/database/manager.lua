@@ -8,7 +8,7 @@ local active_adapter_name = nil
 local active_adapter = nil
 
 -- Configuration
-M.query_cache_enabled = (os.getenv("RIO_ENV") ~= "test" and _G.RIO_ENV ~= "test")
+M.query_cache_enabled = true
 M.query_cache = {}
 M.verbose = true -- If true, prints initialization and query info
 
