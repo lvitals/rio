@@ -289,6 +289,16 @@ function Model:find_by(attributes)
     for k, v in pairs(attributes) do q:where(k, v) end
     return q:first()
 end
+
+function Model:find_or_create_by(attributes)
+    local record = self:find_by(attributes)
+    if record then return record end
+    return self:create(attributes)
+end
+
+function Model:first_or_create(attributes)
+    return self:find_or_create_by(attributes)
+end
 function Model:exists(conditions)
     local q = self:query()
     if type(conditions) == "table" then for k, v in pairs(conditions) do q:where(k, v) end
@@ -312,6 +322,10 @@ function Model:destroy_all()
     local count = 0
     for _, item in ipairs(items) do if item:delete() then count = count + 1 end end
     return count
+end
+
+function Model:delete_all()
+    return self:query():delete()
 end
 
 function Model:raw(sql, bindings) return QueryBuilder.raw(sql, bindings) end
