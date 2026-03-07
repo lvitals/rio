@@ -102,6 +102,11 @@ function M.html(adapter, status, html, headers_obj)
     send_answer(adapter, headers, html or "")
 end
 
+function M.raw(adapter, status, body, headers_obj)
+    local headers = build_headers(status, nil, headers_obj)
+    send_answer(adapter, headers, body)
+end
+
 function M.view(adapter, status, view_name, data, headers_obj)
     local html, err = etl.render_file("app/views/" .. view_name .. ".etl", data or {})
     if not html then

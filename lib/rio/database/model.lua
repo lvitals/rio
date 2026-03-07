@@ -46,13 +46,49 @@ end
 local Model = {}
 Model.__index = Model
 
+-- SCOPE ENGINE: Proxy calls from ModelClass to QueryBuilder
+local function add_query_proxy(ModelClass)
+    local mt = getmetatable(ModelClass)
+    local original_index = mt.__index
+    
+    mt.__index = function(t, k)
+        -- 1. Check Model base methods (find, all, query, belongs_to, has_many, etc.)
+        if Model[k] then return Model[k] end
+        
+        -- 2. Scopes Logic: Methods defined directly on the ModelClass (Scopes)
+        local member = rawget(t, k)
+        if type(member) == "function" then
+            return function(self, ...)
+                -- Determine if we are starting a query (called on Class) or chaining (called on Query)
+                -- mt is the metatable of the ModelClass itself.
+                local self_mt = getmetatable(self)
+                if self_mt == mt then
+                    local q = self:query()
+                    return member(self, q, ...) or q
+                end
+                -- If called on something else (like an instance), just return the original function
+                -- This prevents the "attempt to index a string value" error in logger or elsewhere
+                return member
+            end
+        end
+        
+        -- 3. QueryBuilder methods proxy
+        if QueryBuilder[k] then
+            return function(self, ...)
+                return self:query()[k](self:query(), ...)
+            end
+        end
+        return nil
+    end
+end
+
 function Model:extend(config)
     config = config or {}
     local ModelClass = {
         _relations = {},
         table_name = config.table_name,
         primary_key = config.primary_key or "id",
-        timestamps = config.timestamps ~= false, -- default to true
+        timestamps = config.timestamps ~= false,
         fillable = config.fillable or {},
         hidden = config.hidden or {},
         attributes = config.attributes or {},
@@ -66,6 +102,8 @@ function Model:extend(config)
             return Model[k]
         end 
     })
+    
+    add_query_proxy(ModelClass)
     return ModelClass
 end
 
@@ -83,8 +121,18 @@ function Model:new(attributes)
     
     setmetatable(instance, {
         __index = function(t, k)
+            -- If the class has the member and it's a function, it's a method.
+            -- We must return the raw function so colon notation works: inst:method()
             local class_val = ModelClass[k]
-            if class_val ~= nil then return class_val end
+            if class_val ~= nil then
+                -- Important: if it's a proxy function from add_query_proxy, 
+                -- we want the original function for instance calls.
+                if type(class_val) == "function" then
+                    return rawget(ModelClass, k) or Model[k] or class_val
+                end
+                return class_val 
+            end
+            
             local attr_val = t._attributes[k]
             if attr_val ~= nil then return attr_val end
             
@@ -102,10 +150,9 @@ function Model:new(attributes)
             else t._attributes[k] = v end
         end,
         __tostring = function(t)
-            -- Generic descriptive field detection
             local attrs = t._attributes
-            local display = attrs.name or attrs.title or attrs.username or attrs.display_name or attrs.label or attrs.id
-            return tostring(display or "Model Instance")
+            local display = attrs.name or attrs.title or attrs.username or attrs.id or "Model Instance"
+            return tostring(display)
         end
     })
     return instance
@@ -125,6 +172,7 @@ local function get_related_model(model_path, name)
 end
 
 function Model:belongs_to(name, options)
+    if not self or type(self) == "string" then return end -- Avoid dot-notation crash
     options = options or {}
     local model_path = options.model or ("app.models." .. name)
     self._relations = self._relations or {}
@@ -146,6 +194,7 @@ function Model:belongs_to(name, options)
 end
 
 function Model:has_many(name, options)
+    if not self or type(self) == "string" then return end
     options = options or {}
     local singular_name = string_utils.singularize(name)
     local model_path = options.model or ("app.models." .. singular_name)
@@ -185,6 +234,7 @@ function Model:has_many(name, options)
 end
 
 function Model:has_one(name, options)
+    if not self or type(self) == "string" then return end
     options = options or {}
     local model_path = options.model or ("app.models." .. name)
     self._relations = self._relations or {}
@@ -468,33 +518,24 @@ function Model:_filterAttributes(data)
     local class = self.class or self
     local fillable = class.fillable
     
-    -- If fillable is defined as a table with fields, ONLY those fields are allowed
     if type(fillable) == "table" and #fillable > 0 then
         local allowed = {}
         for _, f in ipairs(fillable) do allowed[f] = true end
-        
         for k, v in pairs(data) do
-            if allowed[k] then
-                filtered[k] = v
-            end
+            if allowed[k] then filtered[k] = v end
         end
-        
-        -- Always allow timestamps if enabled
         if class.timestamps ~= false then
             if data.created_at then filtered.created_at = data.created_at end
             if data.updated_at then filtered.updated_at = data.updated_at end
         end
-        
         return filtered
     end
 
-    -- Fallback: If fillable is NOT defined or empty, allow everything except internals
     for k, v in pairs(data) do 
         if type(k) == "string" and k:sub(1,1) ~= "_" and k ~= "errors" and k ~= "class" then 
             filtered[k] = v 
         end 
     end
-    
     return filtered
 end
 

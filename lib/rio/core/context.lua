@@ -88,6 +88,10 @@ function M.new(adapter, config)
         return response.html(self.adapter, status or 200, html, self.response_headers)
     end
     
+    function ctx:raw(status, body)
+        return response.raw(self.adapter, status or 200, body, self.response_headers)
+    end
+    
     function ctx:view(view_path, data, status)
         local view_data = data or {}
         for k, v in pairs(self.state) do if view_data[k] == nil then view_data[k] = v end end

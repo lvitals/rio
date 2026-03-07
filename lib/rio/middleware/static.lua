@@ -51,7 +51,15 @@ function M.create(app, options)
             return ctx:error(403, "Forbidden")
         end
         
+        -- Strip leading slash and handle optional /public prefix
         local req_path = ctx.path:gsub("^/", "")
+        
+        -- If the URL starts with 'public/', we remove it because public_dir is usually 'public'
+        -- This allows both /public/css/style.css and /css/style.css to work.
+        if req_path:sub(1, 7) == "public/" then
+            req_path = req_path:sub(8)
+        end
+        
         local file_path = public_dir .. "/" .. req_path
         
         -- Try to open the file in binary mode.
