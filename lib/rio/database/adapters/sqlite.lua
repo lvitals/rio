@@ -48,7 +48,7 @@ function SQLiteAdapter:get_table_options() return "" end
 function SQLiteAdapter:get_timestamp_default() return "DEFAULT CURRENT_TIMESTAMP" end
 
 function SQLiteAdapter.escape_value(value)
-    if value == nil then return "NULL" end
+    if value == nil then return "0" end -- In SQLite context, nil often means false/0 for boolean columns
     if type(value) == "number" then return tostring(value) end
     if type(value) == "boolean" then return value and "1" or "0" end
     return "'" .. tostring(value):gsub("'", "''") .. "'"
