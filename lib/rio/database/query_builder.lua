@@ -8,8 +8,7 @@ local DBManager = require("rio.database.manager")
 local string_utils = require("rio.utils.string")
 
 function QueryBuilder.new(model)
-    -- Initialize state directly in the instance table
-    local self = {
+    local qb = {
         _model = model,
         _table = (type(model) == "table" and (model.table_name or model._table)) or nil,
         _wheres = {},
@@ -22,17 +21,19 @@ function QueryBuilder.new(model)
         _distinct = false
     }
 
-    -- Define the metatable for method lookup and scoping
-    setmetatable(self, {
+    setmetatable(qb, {
         __index = function(t, k)
-            -- 1. Check QueryBuilder class methods (where, get, first, etc.)
+            -- 1. Check QueryBuilder class methods
             if QueryBuilder[k] then return QueryBuilder[k] end
             
-            -- 2. Scopes Logic: Delegate to Model
-            if model and type(model) == "table" and type(model[k]) == "function" then
-                return function(_, ...)
-                    -- Call the scope on the model class, passing the QueryBuilder instance
-                    return model[k](model, t, ...) or t
+            -- 2. Scopes Logic: Delegate to Model's shadow methods
+            if model and type(model) == "table" and model._methods then
+                local scope = model._methods[k]
+                if type(scope) == "function" then
+                    return function(_, ...)
+                        -- Call scope(Model, Query, ...)
+                        return scope(model, t, ...) or t
+                    end
                 end
             end
             return nil
@@ -42,8 +43,10 @@ function QueryBuilder.new(model)
         end
     })
     
-    return self
+    return qb
 end
+
+function QueryBuilder:query() return self end
 
 function QueryBuilder:cache(ttl) self._cache_ttl = ttl or 3600; return self end
 function QueryBuilder:distinct() self._distinct = true; return self end
@@ -82,28 +85,35 @@ function QueryBuilder:whereHas(name, callback) return self:_addWhereHas(name, ca
 function QueryBuilder:orWhereHas(name, callback) return self:_addWhereHas(name, callback, "OR") end
 
 function QueryBuilder:_addWhereHas(name, callback, boolean_type)
-    if not self._model or not self._model._relations or not self._model._relations[name] then
+    local model = self._model
+    local methods = model and model._methods
+    if not methods or not methods._relations or not methods._relations[name] then
         error("Relation '" .. tostring(name) .. "' not defined on model")
     end
-    local rel_meta = self._model._relations[name].metadata
+    
+    local rel_data = methods._relations[name]
+    local rel_meta = rel_data.metadata
     local RelatedModel = require(rel_meta.model_path)
     local sub_qb = RelatedModel:query():select("1")
     
     if callback then callback(sub_qb) end
     
+    local parent_table = methods.table_name or self._table
+    if not parent_table then error("Parent table not defined for whereHas") end
+
     if rel_meta.through then
-        local through_rel = self._model._relations[rel_meta.through]
+        local through_rel = methods._relations[rel_meta.through]
         local through_meta = through_rel.metadata
         local ThroughModel = require(through_meta.model_path)
         local target_fk = (rel_meta.source or string_utils.singularize(name)) .. "_id"
-        local parent_fk = through_meta.foreign_key or (string_utils.singularize(self._model.table_name) .. "_id")
+        local parent_fk = through_meta.foreign_key or (string_utils.singularize(methods.table_name) .. "_id")
         
         sub_qb:join(ThroughModel.table_name, ThroughModel.table_name .. "." .. target_fk, "=", RelatedModel.table_name .. ".id")
-        sub_qb:whereColumn(ThroughModel.table_name .. "." .. parent_fk, "=", self._table .. ".id")
+        sub_qb:whereColumn(ThroughModel.table_name .. "." .. parent_fk, "=", parent_table .. ".id")
     elseif rel_meta.type == "belongs_to" then
-        sub_qb:whereColumn(RelatedModel.table_name .. "." .. (rel_meta.primary_key or "id"), "=", self._table .. "." .. (rel_meta.foreign_key or (name .. "_id")))
+        sub_qb:whereColumn(RelatedModel.table_name .. "." .. (rel_meta.primary_key or "id"), "=", parent_table .. "." .. (rel_meta.foreign_key or (name .. "_id")))
     else
-        sub_qb:whereColumn(RelatedModel.table_name .. "." .. (rel_meta.foreign_key or (string_utils.singularize(self._model.table_name) .. "_id")), "=", self._table .. "." .. (rel_meta.primary_key or "id"))
+        sub_qb:whereColumn(RelatedModel.table_name .. "." .. (rel_meta.foreign_key or (string_utils.singularize(methods.table_name) .. "_id")), "=", parent_table .. ".id")
     end
     
     table.insert(self._wheres, { type = boolean_type, raw = "EXISTS (" .. sub_qb:toSql() .. ")" })
