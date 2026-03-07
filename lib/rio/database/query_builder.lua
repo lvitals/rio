@@ -250,6 +250,8 @@ function QueryBuilder:delete()
     return (type(res) == "table" and res.affected) and res.affected >= 0 or res ~= nil
 end
 
+function QueryBuilder:delete_all() return self:delete() end
+
 local M = {}
 M.table = function(table_name) return QueryBuilder.new():table(table_name) end
 M.raw = function(sql, bindings) return DBManager.query(sql, bindings) end
