@@ -206,7 +206,6 @@ end
 
 -- Executes a raw query.
 function M.query(sql, bindings)
-    M.clear_query_cache()
     return wrap_adapter_call("query", sql, bindings)
 end
 
