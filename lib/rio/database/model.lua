@@ -132,7 +132,7 @@ function Model:new(attributes)
 end
 
 -- ==========================
--- RELATIONSHIP HELPERS
+-- RELATIONSHIP HELPERS (Class)
 -- ==========================
 
 local function get_related_model(model_path, name)
@@ -321,14 +321,23 @@ end
 -- ==========================
 
 function Model:hasMany(Rel, fk, lk)
-    local val = self[lk or self.primary_key or "id"]
-    local q = Rel:query():where(fk or (string_utils.singularize(self.class.table_name or "") .. "_id"), val)
-    function q:build(a) a = a or {}; a[fk] = val; return Rel:new(a) end
+    local lk_field = lk or self.primary_key or "id"
+    local fk_field = fk or (string_utils.singularize(self.class.table_name or "") .. "_id")
+    local val = self[lk_field]
+    local q = Rel:query():where(fk_field, val)
+    function q:build(a) a = a or {}; a[fk_field] = val; return Rel:new(a) end
     function q:create(a) local c = self:build(a); c:save(); return c end
     return q
 end
-function Model:hasOne(Rel, fk, lk) return Rel:query():where(fk or (string_utils.singularize(self.class.table_name or "") .. "_id"), self[lk or self.primary_key or "id"]):first() end
-function Model:belongsTo(Rel, fk, owner_key, name) return Rel:find(self[fk or (name and name .. "_id") or (string_utils.singularize(Rel.table_name) .. "_id")]) end
+function Model:hasOne(Rel, fk, lk) 
+    local lk_field = lk or self.primary_key or "id"
+    local fk_field = fk or (string_utils.singularize(self.class.table_name or "") .. "_id")
+    return Rel:query():where(fk_field, self[lk_field]):first() 
+end
+function Model:belongsTo(Rel, fk, owner_key, name) 
+    local fk_field = fk or (name and name .. "_id") or (string_utils.singularize(Rel.table_name or "") .. "_id")
+    return Rel:find(self[fk_field]) 
+end
 
 -- ==========================
 -- INTERNAL
@@ -346,6 +355,24 @@ function Model:validate()
         if rules.uniqueness and v then
             local q = self:query():where(field, v); if self._exists then q:where(self.primary_key or "id", "!=", self[self.primary_key or "id"]) end
             if q:first() then self.errors:add(field, "has already been taken") end
+        end
+        if rules.format and v then
+            local r = rules.format
+            if r.with and not tostring(v):match(r.with) then self.errors:add(field, r.message or "is invalid") end
+        end
+        if rules.length and v then
+            local len = #tostring(v); local r = rules.length
+            if r.minimum and len < r.minimum then self.errors:add(field, r.message or "is too short") end
+            if r.maximum and len > r.maximum then self.errors:add(field, r.message or "is too long") end
+        end
+        if rules.numericality and v then
+            local num = tonumber(v); local r = rules.numericality
+            if not num then self.errors:add(field, r.message or "is not a number")
+            else
+                if r.only_integer and math.floor(num) ~= num then self.errors:add(field, r.message or "must be an integer") end
+                if r.greater_than and num <= r.greater_than then self.errors:add(field, r.message or "must be greater than " .. r.greater_than) end
+                if r.less_than and num >= r.less_than then self.errors:add(field, r.message or "must be less than " .. r.less_than) end
+            end
         end
     end
     return not self.errors:any()
