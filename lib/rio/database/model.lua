@@ -48,22 +48,18 @@ local function add_query_proxy(ModelClass)
         -- 1. Check Model base methods (find, all, query, belongs_to, etc.)
         if Model[k] then return Model[k] end
         
-        -- 2. Direct members (attributes or Scopes)
+        -- 2. Direct members (attributes like fillable, or Scopes)
         local member = rawget(t, k)
         if member ~= nil then
             if type(member) == "function" then
-                return function(self, ...)
-                    -- If called on the Class (e.g. Post:published()), start query and inject QB
-                    local self_mt = getmetatable(self)
-                    if self_mt == mt then
-                        local q = self:query()
-                        return member(self, q, ...) or q
-                    elseif type(self) == "table" and rawget(self, "_wheres") then
-                        -- Called on a QueryBuilder
-                        return member(t, self, ...) or self
+                return function(receiver, ...)
+                    -- If called on the Class (Post:published()), receiver is the Class table (t)
+                    if receiver == t then
+                        local q = t:query()
+                        return member(t, q, ...) or q
                     end
-                    -- Instance call
-                    return member(self, ...)
+                    -- Otherwise it's an instance call (post:save())
+                    return member(receiver, ...)
                 end
             end
             return member
@@ -71,8 +67,8 @@ local function add_query_proxy(ModelClass)
 
         -- 3. QueryBuilder methods proxy (where, orderBy, limit, etc.)
         if type(QueryBuilder[k]) == "function" then
-            return function(self, ...)
-                local q = (getmetatable(self) == mt) and self:query() or self
+            return function(receiver, ...)
+                local q = receiver:query()
                 return q[k](q, ...)
             end
         end
@@ -95,12 +91,7 @@ function Model:extend(config)
         soft_deletes = config.soft_deletes or false
     }
     ModelClass.class = ModelClass
-    
-    -- Metatable for the Class itself
-    setmetatable(ModelClass, { 
-        __index = function(t, k) return Model[k] end 
-    })
-    
+    setmetatable(ModelClass, { __index = function(t, k) return Model[k] end })
     add_query_proxy(ModelClass)
     return ModelClass
 end
@@ -118,15 +109,10 @@ function Model:new(attributes)
     }
     setmetatable(instance, {
         __index = function(t, k)
-            -- Methods from Class
             local class_val = ModelClass[k]
             if class_val ~= nil then return class_val end
-            
-            -- Attributes
             local attr_val = t._attributes[k]
             if attr_val ~= nil then return attr_val end
-            
-            -- Lazy load relations
             local rel_entry = ModelClass._relations and ModelClass._relations[k]
             if rel_entry and rel_entry.fn then
                 if not t._relations_loaded[k] then t._relations_loaded[k] = rel_entry.fn(t) end
@@ -185,8 +171,8 @@ function Model:has_many(name, options)
                 local target_fk = (options.source or singular) .. "_id"
                 local parent_fk = through_meta.foreign_key or (string_utils.singularize(ModelClass.table_name or "") .. "_id")
                 return TargetModel:query():select(TargetModel.table_name .. ".*")
-                    :join(ThroughModel.table_name, ThroughModel.table_name .. "." .. target_fk, "=", TargetModel.table_name .. "." .. (TargetModel.primary_key or "id"))
-                    :where(ThroughModel.table_name .. "." .. parent_fk, inst[ModelClass.primary_key or "id"])
+                    :join(ThroughModel.table_name, ThroughModel.table_name .. "." .. target_fk, "=", TargetModel.table_name .. ".id")
+                    :where(ThroughModel.table_name .. "." .. parent_fk, inst.id)
             else
                 local Rel = get_related_model(path, singular); if not Rel then error("Could not load model: " .. path) end
                 return inst:hasMany(Rel, options.foreign_key, options.local_key)
@@ -342,7 +328,7 @@ function Model:hasMany(Rel, fk, lk)
     return q
 end
 function Model:hasOne(Rel, fk, lk) return Rel:query():where(fk or (string_utils.singularize(self.class.table_name or "") .. "_id"), self[lk or self.primary_key or "id"]):first() end
-function Model:belongsTo(Rel, fk, owner_key, name) return Rel:find(self[fk or (name and name .. "_id") or (string_utils.singularize(Rel.table_name or "") .. "_id")]) end
+function Model:belongsTo(Rel, fk, owner_key, name) return Rel:find(self[fk or (name and name .. "_id") or (string_utils.singularize(Rel.table_name) .. "_id")]) end
 
 -- ==========================
 -- INTERNAL

@@ -8,48 +8,51 @@ local DBManager = require("rio.database.manager")
 local string_utils = require("rio.utils.string")
 
 function QueryBuilder.new(model)
-    local qb = setmetatable({}, {
+    -- Initialize state directly in the instance table
+    local self = {
+        _model = model,
+        _table = (type(model) == "table" and (model.table_name or model._table)) or nil,
+        _wheres = {},
+        _selects = {"*"},
+        _joins = {},
+        _orderBy = {},
+        _limit = nil,
+        _offset = nil,
+        _cache_ttl = nil,
+        _distinct = false
+    }
+
+    -- Define the metatable for method lookup and scoping
+    setmetatable(self, {
         __index = function(t, k)
-            -- 1. Check QueryBuilder methods first
+            -- 1. Check QueryBuilder class methods (where, get, first, etc.)
             if QueryBuilder[k] then return QueryBuilder[k] end
             
-            -- 2. Scopes Logic: Delegate to Model's proxy
-            -- If the model has it, the proxy will handle the injection
-            if model and type(model) == "table" and model[k] then
+            -- 2. Scopes Logic: Delegate to Model
+            if model and type(model) == "table" and type(model[k]) == "function" then
                 return function(_, ...)
-                    -- Call the proxy function on 't' (the QueryBuilder)
-                    return model[k](t, ...)
+                    -- Call the scope on the model class, passing the QueryBuilder instance
+                    return model[k](model, t, ...) or t
                 end
             end
             return nil
         end,
         __tostring = function(q)
-            local table_name = rawget(q, "_table") or "unknown"
-            local selects = rawget(q, "_selects") or {"*"}
-            return string.format("Query(%s) { select: [%s] }", table_name, table.concat(selects, ", "))
+            return string.format("Query(%s) { select: [%s] }", q._table or "unknown", table.concat(q._selects, ", "))
         end
     })
     
-    rawset(qb, "_model", model)
-    if type(model) == "table" then
-        rawset(qb, "_table", model.table_name or model._table or nil)
-    end
-    rawset(qb, "_wheres", {})
-    rawset(qb, "_selects", {"*"})
-    rawset(qb, "_joins", {})
-    rawset(qb, "_orderBy", {})
-    rawset(qb, "_limit", nil)
-    rawset(qb, "_offset", nil)
-    rawset(qb, "_cache_ttl", nil)
-    rawset(qb, "_distinct", false)
-    
-    return qb
+    return self
 end
 
 function QueryBuilder:cache(ttl) self._cache_ttl = ttl or 3600; return self end
 function QueryBuilder:distinct() self._distinct = true; return self end
 function QueryBuilder:table(name) self._table = self:_validateIdentifier(name); return self end
-function QueryBuilder:select(...) local args = {...}; if #args > 0 then self._selects = args end; return self end
+function QueryBuilder:select(...)
+    local args = {...}
+    if #args > 0 then self._selects = args end
+    return self
+end
 
 function QueryBuilder:where(column, operator, value)
     if type(column) == "function" then
@@ -142,15 +145,27 @@ function QueryBuilder:_buildWhere(wheres_list)
 end
 
 function QueryBuilder:toSql()
+    if not self._table then
+        error("QueryBuilder error: No table defined for query. Ensure your model has 'table_name' set.")
+    end
+    
     local sql = "SELECT " .. (self._distinct and "DISTINCT " or "") .. table.concat(self._selects, ", ") .. " FROM " .. self._table
-    for _, join in ipairs(self._joins) do sql = sql .. string.format(" %s JOIN %s ON %s %s %s", join.type, join.table, join.first, join.operator, join.second) end
+    
+    for _, join in ipairs(self._joins) do
+        sql = sql .. string.format(" %s JOIN %s ON %s %s %s", join.type, join.table, join.first, join.operator, join.second)
+    end
+    
     sql = sql .. self:_buildWhere()
+    
     if #self._orderBy > 0 then
-        local orders = {}; for _, order in ipairs(self._orderBy) do table.insert(orders, order.column .. " " .. order.direction) end
+        local orders = {}
+        for _, order in ipairs(self._orderBy) do table.insert(orders, order.column .. " " .. order.direction) end
         sql = sql .. " ORDER BY " .. table.concat(orders, ", ")
     end
+    
     if self._limit then sql = sql .. " LIMIT " .. self._limit end
     if self._offset then sql = sql .. " OFFSET " .. self._offset end
+    
     return sql
 end
 
