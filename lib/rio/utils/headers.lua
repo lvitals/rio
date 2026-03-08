@@ -33,7 +33,7 @@ function M.set_security_headers(headers, config)
     headers:upsert("x-xss-protection", "1; mode=block")
     headers:upsert("referrer-policy", config.referrer_policy or "strict-origin-when-cross-origin")
     
-    local csp = config.csp or "default-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'self'"
+    local csp = config.csp or "default-src 'self' 'unsafe-inline'; img-src * data: http: https:; frame-ancestors 'self'"
     headers:upsert("content-security-policy", csp)
 
     -- Custom Headers from configuration
