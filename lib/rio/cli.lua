@@ -569,12 +569,14 @@ local function generate_migration(migration_name, fields, table_name_hint)
 end
 
 local function generate_model(model_name, fields)
-    local path = "app/models/" .. underscore(model_name) .. ".lua"
+    -- Support namespaced models for require/class name but use singular path for file
+    local resource_pure = model_name:match("([^:]+)$") or model_name
+    local path = "app/models/" .. underscore(resource_pure) .. ".lua"
     print("Generating model: " .. path)
 
     local content = {}
-    local camelModelName = camel_case(model_name)
-    local pluralTableName = pluralize(underscore(model_name))
+    local camelModelName = camel_case(resource_pure)
+    local pluralTableName = pluralize(underscore(resource_pure))
 
     local column_order, column_definitions = parse_fields(fields)
     
@@ -623,7 +625,7 @@ local function generate_model(model_name, fields)
                     local target_name = pluralTableName
                     if col.options.has_one then
                         rel_type = "has_one"
-                        target_name = underscore(model_name)
+                        target_name = underscore(resource_pure)
                     end
 
                     local inverse_rel = string.format("%s:%s(\"%s\")", camel_case(name), rel_type, target_name)
@@ -673,13 +675,13 @@ local function generate_model(model_name, fields)
     table.insert(content, "return " .. camelModelName)
 
     write_file_content(path, table.concat(content, "\n"))
-    print("Model '" .. model_name .. "' generated successfully.")
+    print("Model '" .. resource_pure .. "' generated successfully.")
 
     -- Generate test file for the model
-    local test_path = "test/models/" .. underscore(model_name) .. "_test.lua"
+    local test_path = "test/models/" .. underscore(resource_pure) .. "_test.lua"
     print("Generating model test: " .. test_path)
     local test_content = {}
-    table.insert(test_content, "local " .. camelModelName .. " = require(\"app.models." .. underscore(model_name) .. "\")")
+    table.insert(test_content, "local " .. camelModelName .. " = require(\"app.models." .. underscore(resource_pure) .. "\")")
 
     table.insert(test_content, "")
     table.insert(test_content, "describe(\"" .. camelModelName .. " Model\", function()")
@@ -689,106 +691,111 @@ local function generate_model(model_name, fields)
     table.insert(test_content, "end)")
 
     write_file_content(test_path, table.concat(test_content, "\n"))
-    print("Model test '" .. model_name .. "_test' generated successfully.")
+    print("Model test '" .. resource_pure .. "_test' generated successfully.")
     
     -- Also generate a migration for creating the table
-    local migration_full_name = "Create" .. camel_case(pluralize(model_name))
-    generate_migration(migration_full_name, fields, underscore(model_name)) -- Pass singular underscored model name for correct pluralization
+    local migration_full_name = "Create" .. camel_case(pluralize(resource_pure))
+    generate_migration(migration_full_name, fields, underscore(resource_pure)) -- Pass singular underscored model name for correct pluralization
 end
 
 local function generate_scaffold_controller(resource_name, fields)
-    local singular_name = underscore(resource_name)
+    local underscored_resource = underscore(resource_name:gsub("::", "/"))
+    local singular_name = underscored_resource:match("([^/]+)$") or underscored_resource
     local plural_name = pluralize(singular_name)
+    
+    local controller_dir = underscored_resource:match("(.+)/")
+    local controller_path = "app/controllers/" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "_controller.lua"
+    
     local controller_class_name = camel_case(plural_name) .. "Controller"
     local model_name = camel_case(singular_name)
-    local path = "app/controllers/" .. plural_name .. "_controller.lua"
     
-    print("Generating scaffold controller: " .. path)
+    if controller_dir then create_dir_if_not_exists("app/controllers/" .. controller_dir) end
+    
+    print("Generating scaffold controller: " .. controller_path)
 
     local content = {}
-    table.insert(content, "local " .. model_name .. " = require(\"app.models." .. singular_name .. "\")")
+    table.insert(content, "local " .. model_name .. " = require(\"app.models." .. underscore(resource_name:match("([^:]+)$") or resource_name) .. "\")")
     table.insert(content, "local " .. controller_class_name .. " = {}")
     table.insert(content, "")
 
     -- index
     table.insert(content, "function " .. controller_class_name .. ":index(ctx)")
     table.insert(content, "    local items = " .. model_name .. ":all()")
-    table.insert(content, "    return ctx:view(\"" .. plural_name .. "/index\", { " .. plural_name .. " = items })")
+    table.insert(content, "    return ctx:view(\"" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "/index\", { " .. plural_name .. " = items })")
     table.insert(content, "end")
-    table.insert(content, "")
 
     -- show
     table.insert(content, "function " .. controller_class_name .. ":show(ctx)")
     table.insert(content, "    local item = " .. model_name .. ":find(ctx.params.id)")
     table.insert(content, "    if not item then return ctx:text(\"Not Found\", 404) end")
-    table.insert(content, "    return ctx:view(\"" .. plural_name .. "/show\", { " .. singular_name .. " = item })")
+    table.insert(content, "    return ctx:view(\"" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "/show\", { " .. singular_name .. " = item })")
     table.insert(content, "end")
-    table.insert(content, "")
 
     -- new
     table.insert(content, "function " .. controller_class_name .. ":new(ctx)")
-    table.insert(content, "    return ctx:view(\"" .. plural_name .. "/new\", { " .. singular_name .. " = " .. model_name .. ":new() })")
+    table.insert(content, "    return ctx:view(\"" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "/new\", { " .. singular_name .. " = " .. model_name .. ":new() })")
     table.insert(content, "end")
-    table.insert(content, "")
 
     -- edit
     table.insert(content, "function " .. controller_class_name .. ":edit(ctx)")
     table.insert(content, "    local item = " .. model_name .. ":find(ctx.params.id)")
     table.insert(content, "    if not item then return ctx:text(\"Not Found\", 404) end")
-    table.insert(content, "    return ctx:view(\"" .. plural_name .. "/edit\", { " .. singular_name .. " = item })")
+    table.insert(content, "    return ctx:view(\"" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "/edit\", { " .. singular_name .. " = item })")
     table.insert(content, "end")
-    table.insert(content, "")
 
     -- create
     table.insert(content, "function " .. controller_class_name .. ":create(ctx)")
     table.insert(content, "    local item = " .. model_name .. ":new(ctx.body)")
     table.insert(content, "    if item:save() then")
-    table.insert(content, "        return ctx:redirect(\"/" .. plural_name .. "/\" .. item.id .. \"?notice=" .. camel_case(singular_name) .. " was successfully created.\")")
+    table.insert(content, "        return ctx:redirect(\"/" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "/\" .. item.id .. \"?notice=" .. camel_case(singular_name) .. " was successfully created.\")")
     table.insert(content, "    else")
-    table.insert(content, "        return ctx:view(\"" .. plural_name .. "/new\", { " .. singular_name .. " = item, alert = \"Error creating " .. singular_name .. "\" })")
+    table.insert(content, "        return ctx:view(\"" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "/new\", { " .. singular_name .. " = item, alert = \"Error creating " .. singular_name .. "\" })")
     table.insert(content, "    end")
     table.insert(content, "end")
-    table.insert(content, "")
 
     -- update
     table.insert(content, "function " .. controller_class_name .. ":update(ctx)")
     table.insert(content, "    local item = " .. model_name .. ":find(ctx.params.id)")
     table.insert(content, "    if not item then return ctx:text(\"Not Found\", 404) end")
     table.insert(content, "    if item:update(ctx.body) then")
-    table.insert(content, "        return ctx:redirect(\"/" .. plural_name .. "/\" .. item.id .. \"?notice=" .. camel_case(singular_name) .. " was successfully updated.\")")
+    table.insert(content, "        return ctx:redirect(\"/" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "/\" .. item.id .. \"?notice=" .. camel_case(singular_name) .. " was successfully updated.\")")
     table.insert(content, "    else")
-    table.insert(content, "        return ctx:view(\"" .. plural_name .. "/edit\", { " .. singular_name .. " = item, alert = \"Error updating " .. singular_name .. "\" })")
+    table.insert(content, "        return ctx:view(\"" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "/edit\", { " .. singular_name .. " = item, alert = \"Error updating " .. singular_name .. "\" })")
     table.insert(content, "    end")
     table.insert(content, "end")
-    table.insert(content, "")
 
     -- destroy
     table.insert(content, "function " .. controller_class_name .. ":destroy(ctx)")
     table.insert(content, "    local item = " .. model_name .. ":find(ctx.params.id)")
     table.insert(content, "    if item then ")
     table.insert(content, "        item:delete()")
-    table.insert(content, "        return ctx:redirect(\"/" .. plural_name .. "?notice=" .. camel_case(singular_name) .. " was successfully destroyed.\")")
+    table.insert(content, "        return ctx:redirect(\"/" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "?notice=" .. camel_case(singular_name) .. " was successfully destroyed.\")")
     table.insert(content, "    end")
-    table.insert(content, "    return ctx:redirect(\"/" .. plural_name .. "\")")
+    table.insert(content, "    return ctx:redirect(\"/" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "\")")
     table.insert(content, "end")
-    table.insert(content, "")
 
     table.insert(content, "return " .. controller_class_name)
 
-    write_file_content(path, table.concat(content, "\n"))
+    write_file_content(controller_path, table.concat(content, "\n"))
 end
 
 local function generate_api_scaffold_controller(resource_name, fields)
-    local singular_name = underscore(resource_name)
+    local underscored_resource = underscore(resource_name:gsub("::", "/"))
+    local singular_name = underscored_resource:match("([^/]+)$") or underscored_resource
     local plural_name = pluralize(singular_name)
+    
+    local controller_dir = underscored_resource:match("(.+)/")
+    local controller_path = "app/controllers/" .. (controller_dir and (controller_dir .. "/") or "") .. plural_name .. "_controller.lua"
+    
     local controller_class_name = camel_case(plural_name) .. "Controller"
     local model_name = camel_case(singular_name)
-    local path = "app/controllers/" .. plural_name .. "_controller.lua"
     
-    print("Generating API scaffold controller: " .. path)
+    if controller_dir then create_dir_if_not_exists("app/controllers/" .. controller_dir) end
+    
+    print("Generating API scaffold controller: " .. controller_path)
 
     local content = {}
-    table.insert(content, "local " .. model_name .. " = require(\"app.models." .. singular_name .. "\")")
+    table.insert(content, "local " .. model_name .. " = require(\"app.models." .. underscore(resource_name:match("([^:]+)$") or resource_name) .. "\")")
     table.insert(content, "local " .. controller_class_name .. " = {}")
     table.insert(content, "")
 
@@ -797,7 +804,6 @@ local function generate_api_scaffold_controller(resource_name, fields)
     table.insert(content, "    local items = " .. model_name .. ":all()")
     table.insert(content, "    return ctx:json(items)")
     table.insert(content, "end")
-    table.insert(content, "")
 
     -- show
     table.insert(content, "function " .. controller_class_name .. ":show(ctx)")
@@ -805,7 +811,6 @@ local function generate_api_scaffold_controller(resource_name, fields)
     table.insert(content, "    if not item then return ctx:json({ error = \"Not Found\" }, 404) end")
     table.insert(content, "    return ctx:json(item)")
     table.insert(content, "end")
-    table.insert(content, "")
 
     -- create
     table.insert(content, "function " .. controller_class_name .. ":create(ctx)")
@@ -816,7 +821,6 @@ local function generate_api_scaffold_controller(resource_name, fields)
     table.insert(content, "        return ctx:json({ errors = item.errors:all() }, 422)")
     table.insert(content, "    end")
     table.insert(content, "end")
-    table.insert(content, "")
 
     -- update
     table.insert(content, "function " .. controller_class_name .. ":update(ctx)")
@@ -828,7 +832,6 @@ local function generate_api_scaffold_controller(resource_name, fields)
     table.insert(content, "        return ctx:json({ errors = item.errors:all() }, 422)")
     table.insert(content, "    end")
     table.insert(content, "end")
-    table.insert(content, "")
 
     -- destroy
     table.insert(content, "function " .. controller_class_name .. ":destroy(ctx)")
@@ -839,17 +842,19 @@ local function generate_api_scaffold_controller(resource_name, fields)
     table.insert(content, "    end")
     table.insert(content, "    return ctx:json({ error = \"Not Found\" }, 404)")
     table.insert(content, "end")
-    table.insert(content, "")
 
     table.insert(content, "return " .. controller_class_name)
 
-    write_file_content(path, table.concat(content, "\n"))
+    write_file_content(controller_path, table.concat(content, "\n"))
 end
 
 local function generate_scaffold_views(resource_name, fields)
-    local singular_name = underscore(resource_name)
+    local underscored_resource = underscore(resource_name:gsub("::", "/"))
+    local singular_name = underscored_resource:match("([^/]+)$") or underscored_resource
     local plural_name = pluralize(singular_name)
-    local views_dir = "app/views/" .. plural_name
+    local resource_path = (underscored_resource:match("(.+)/") and (underscored_resource:match("(.+)/") .. "/") or "") .. plural_name
+    
+    local views_dir = "app/views/" .. resource_path
     create_dir_if_not_exists(views_dir)
 
     local flash_block = [[
@@ -879,15 +884,15 @@ local function generate_scaffold_views(resource_name, fields)
     for _, name in ipairs(column_order) do
         table.insert(index_content, "      <td style=\"padding: 12px;\"><%= item." .. name .. " %></td>")
     end
-    table.insert(index_content, "      <td style=\"padding: 12px;\"><a href=\"/" .. plural_name .. "/<%= item.id %>\">Show</a></td>")
-    table.insert(index_content, "      <td style=\"padding: 12px;\"><a href=\"/" .. plural_name .. "/<%= item.id %>/edit\">Edit</a></td>")
-    table.insert(index_content, "      <td style=\"padding: 12px;\"><form action=\"/" .. plural_name .. "/<%= item.id %>\" method=\"POST\" style=\"display:inline\"><input type=\"hidden\" name=\"_method\" value=\"DELETE\"><button type=\"submit\" style=\"background: none; border: none; color: #dc3545; cursor: pointer; text-decoration: underline; padding: 0;\" onclick=\"return confirm('Are you sure?')\">Destroy</button></form></td>")
+    table.insert(index_content, "      <td style=\"padding: 12px;\"><a href=\"/" .. resource_path .. "/<%= item.id %>\">Show</a></td>")
+    table.insert(index_content, "      <td style=\"padding: 12px;\"><a href=\"/" .. resource_path .. "/<%= item.id %>/edit\">Edit</a></td>")
+    table.insert(index_content, "      <td style=\"padding: 12px;\"><form action=\"/" .. resource_path .. "/<%= item.id %>\" method=\"POST\" style=\"display:inline\"><input type=\"hidden\" name=\"_method\" value=\"DELETE\"><button type=\"submit\" style=\"background: none; border: none; color: #dc3545; cursor: pointer; text-decoration: underline; padding: 0;\" onclick=\"return confirm('Are you sure?')\">Destroy</button></form></td>")
     table.insert(index_content, "    </tr>")
     table.insert(index_content, "    <% end %>")
     table.insert(index_content, "  </tbody>")
     table.insert(index_content, "</table>")
     table.insert(index_content, "<br>")
-    table.insert(index_content, "<a href=\"/" .. plural_name .. "/new\" style=\"display: inline-block; background-color: #007bff; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none;\">New " .. camel_case(singular_name) .. "</a>")
+    table.insert(index_content, "<a href=\"/" .. resource_path .. "/new\" style=\"display: inline-block; background-color: #007bff; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none;\">New " .. camel_case(singular_name) .. "</a>")
     write_file_content(views_dir .. "/index.etl", table.concat(index_content, "\n"))
 
     -- show.etl
@@ -899,8 +904,8 @@ local function generate_scaffold_views(resource_name, fields)
         table.insert(show_content, "<p style=\"font-size: 1.1em; margin-bottom: 10px;\"><strong style=\"color: #495057;\">" .. camel_case(name) .. ":</strong> <%= " .. singular_name .. "." .. name .. " %></p>")
     end
     table.insert(show_content, "<div style=\"margin-top: 20px;\">")
-    table.insert(show_content, "  <a href=\"/" .. plural_name .. "/<%= " .. singular_name .. ".id %>/edit\">Edit</a> |")
-    table.insert(show_content, "  <a href=\"/" .. plural_name .. "\">Back to " .. plural_name .. "</a>")
+    table.insert(show_content, "  <a href=\"/" .. resource_path .. "/<%= " .. singular_name .. ".id %>/edit\">Edit</a> |")
+    table.insert(show_content, "  <a href=\"/" .. resource_path .. "\">Back to " .. plural_name .. "</a>")
     table.insert(show_content, "</div>")
     write_file_content(views_dir .. "/show.etl", table.concat(show_content, "\n"))
 
@@ -920,7 +925,7 @@ local function generate_scaffold_views(resource_name, fields)
         "  </div>",
         "<% end %>",
         "",
-        "<form action=\"/" .. plural_name .. "\" method=\"POST\" style=\"background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6;\">"
+        "<form action=\"/" .. resource_path .. "\" method=\"POST\" style=\"background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6;\">"
     }
     
     for _, name in ipairs(column_order) do
@@ -942,7 +947,7 @@ local function generate_scaffold_views(resource_name, fields)
     end
     table.insert(new_content, "  <button type=\"submit\" style=\"background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 1em; cursor: pointer;\">Create " .. camel_case(singular_name) .. "</button>")
     table.insert(new_content, "</form>")
-    table.insert(new_content, "<br><a href=\"/" .. plural_name .. "\">Back to " .. plural_name .. "</a>")
+    table.insert(new_content, "<br><a href=\"/" .. resource_path .. "\">Back to " .. plural_name .. "</a>")
     write_file_content(views_dir .. "/new.etl", table.concat(new_content, "\n"))
 
     -- edit.etl
@@ -961,7 +966,7 @@ local function generate_scaffold_views(resource_name, fields)
         "  </div>",
         "<% end %>",
         "",
-        "<form action=\"/" .. plural_name .. "/<%= " .. singular_name .. ".id %>\" method=\"POST\" style=\"background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6;\">",
+        "<form action=\"/" .. resource_path .. "/<%= " .. singular_name .. ".id %>\" method=\"POST\" style=\"background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6;\">",
         "  <input type=\"hidden\" name=\"_method\" value=\"PUT\">"
     }
     
@@ -984,19 +989,24 @@ local function generate_scaffold_views(resource_name, fields)
     end
     table.insert(edit_content, "  <button type=\"submit\" style=\"background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 1em; cursor: pointer;\">Update " .. camel_case(singular_name) .. "</button>")
     table.insert(edit_content, "</form>")
-    table.insert(edit_content, "<br><div style=\"margin-top: 10px;\"><a href=\"/" .. plural_name .. "/<%= " .. singular_name .. ".id %>\">Show</a> | " ..
-    "<a href=\"/" .. plural_name .. "\">Back to " .. plural_name .. "</a></div>")
+    table.insert(edit_content, "<br><div style=\"margin-top: 10px;\"><a href=\"/" .. resource_path .. "/<%= " .. singular_name .. ".id %>\">Show</a> | " ..
+    "<a href=\"/" .. resource_path .. "\">Back to " .. plural_name .. "</a></div>")
     write_file_content(views_dir .. "/edit.etl", table.concat(edit_content, "\n"))
 
     print("Scaffold views for '" .. plural_name .. "' generated successfully.")
 end
 
 local function generate_scaffold_tests(resource_name, fields, api_only)
-    local singular_name = underscore(resource_name)
+    local underscored_resource = underscore(resource_name:gsub("::", "/"))
+    local singular_name = underscored_resource:match("([^/]+)$") or underscored_resource
     local plural_name = pluralize(singular_name)
+    
+    local test_dir = underscored_resource:match("(.+)/")
+    local path = "test/controllers/" .. (test_dir and (test_dir .. "/") or "") .. plural_name .. "_test.lua"
+    if test_dir then create_dir_if_not_exists("test/controllers/" .. test_dir) end
+    
     local controller_class_name = camel_case(plural_name) .. "Controller"
     local model_name = camel_case(singular_name)
-    local path = "test/controllers/" .. plural_name .. "_test.lua"
     
     print("Generating scaffold tests: " .. path .. (api_only and " (API-only)" or ""))
 
@@ -1041,8 +1051,8 @@ local function generate_scaffold_tests(resource_name, fields, api_only)
     local lines = {}
     local function add(line) table.insert(lines, line) end
 
-    add("local " .. model_name .. " = require(\"app.models." .. singular_name .. "\")")
-    add("local " .. controller_class_name .. " = require(\"app.controllers." .. plural_name .. "_controller\")")
+    add("local " .. model_name .. " = require(\"app.models." .. underscore(resource_name:match("([^:]+)$") or resource_name) .. "\")")
+    add("local " .. controller_class_name .. " = require(\"app.controllers." .. underscored_resource .. "_controller\")")
     add("")
     add("describe(\"" .. controller_class_name .. "\", function()")
     add("    -- Mock context helper")
@@ -1072,7 +1082,7 @@ local function generate_scaffold_tests(resource_name, fields, api_only)
         add("        assert.equals(1, #res.data)")
     else
         add("        assert.equals(\"view\", res.type)")
-        add("        assert.equals(\"" .. plural_name .. "/index\", res.path)")
+        add("        assert.equals(\"" .. (test_dir and (test_dir .. "/") or "") .. plural_name .. "/index\", res.path)")
         add("        assert.is_table(res.data." .. plural_name .. ")")
         add("        assert.equals(1, #res.data." .. plural_name .. ")")
     end
@@ -1087,7 +1097,7 @@ local function generate_scaffold_tests(resource_name, fields, api_only)
         add("        assert.equals(tonumber(item.id), tonumber(res.data.id))")
     else
         add("        assert.equals(\"view\", res.type)")
-        add("        assert.equals(\"" .. plural_name .. "/show\", res.path)")
+        add("        assert.equals(\"" .. (test_dir and (test_dir .. "/") or "") .. plural_name .. "/show\", res.path)")
         add("        assert.equals(tonumber(item.id), tonumber(res.data." .. singular_name .. ".id))")
     end
     add("    end)")
@@ -1156,14 +1166,27 @@ local function generate_scaffold(resource_name, fields, api_only)
     generate_scaffold_tests(resource_name, fields, api_only)
     
     -- 5. Update Routes
-    local plural_name = pluralize(underscore(resource_name))
+    local underscored_resource = underscore(resource_name:gsub("::", "/"))
+    local singular_name = underscored_resource:match("([^/]+)$") or underscored_resource
+    local plural_name = pluralize(singular_name)
+    local namespace = resource_name:match("^(.+)::")
+    local controller_name = (namespace and (namespace .. "::") or "") .. camel_case(plural_name)
+    
     local routes_path = "config/routes.lua"
     local f = io.open(routes_path, "r")
     if f then
         local content = f:read("*a")
         f:close()
-        if not content:find("app:resources(\"" .. plural_name .. "\")") then
-            local modified_content = content:gsub("(.-)end%s*$", "%1    app:resources(\"" .. plural_name .. "\")\nend")
+        
+        local resource_line
+        if namespace then
+            resource_line = "    app:resources(\"" .. (underscore(namespace) .. "/" .. plural_name) .. "\", \"" .. controller_name .. "\")"
+        else
+            resource_line = "    app:resources(\"" .. plural_name .. "\")"
+        end
+
+        if not content:find(resource_line, 1, true) then
+            local modified_content = content:gsub("(.-)end%s*$", "%1" .. resource_line .. "\nend")
             write_file_content(routes_path, modified_content)
             print("Resource routes added to config/routes.lua.")
         end
@@ -1171,7 +1194,8 @@ local function generate_scaffold(resource_name, fields, api_only)
 end
 
 local function generate_resource(resource_name, fields, api_only)
-    local singular_name = underscore(resource_name)
+    local resource_pure = resource_name:match("([^:]+)$") or resource_name
+    local singular_name = underscore(resource_pure)
     local plural_name = pluralize(singular_name)
 
     print("Generating resource: " .. resource_name .. (api_only and " (API-only)" or ""))
@@ -1180,7 +1204,9 @@ local function generate_resource(resource_name, fields, api_only)
     generate_model(resource_name, fields)
 
     -- 2. Generate Controller (pluralized name)
-    generate_controller(plural_name, {}, api_only) -- empty actions
+    local namespace = resource_name:match("^(.+)::")
+    local controller_full_name = (namespace and (namespace .. "::") or "") .. camel_case(plural_name)
+    generate_controller(controller_full_name, {}, api_only) -- empty actions
 
     -- 3. Add routes to config/routes.lua
     print("Updating config/routes.lua with resource routes...")
@@ -1190,19 +1216,25 @@ local function generate_resource(resource_name, fields, api_only)
         local content = f:read("*a")
         f:close()
 
+        local resource_route
+        if namespace then
+             resource_route = "app:resources(\"" .. (underscore(namespace) .. "/" .. plural_name) .. "\", \"" .. controller_full_name .. "\")"
+        else
+             resource_route = "app:resources(\"" .. plural_name .. "\")"
+        end
+
         -- Check if resource already exists in routes
-        if content:find("app:resources(\"" .. plural_name .. "\")") then
+        if content:find(resource_route, 1, true) then
             print("Notice: Resource routes for '" .. plural_name .. "' already exist in config/routes.lua. Skipping.")
         else
             -- Insert before the last 'end' of the return function(app)
-            -- This is a bit naive but works for standard generated routes.lua
-            local modified_content = content:gsub("(.-)end%s*$", "%1    app:resources(\"" .. plural_name .. "\")\nend")
+            local modified_content = content:gsub("(.-)end%s*$", "%1    " .. resource_route .. "\nend")
             
             if modified_content ~= content then
                 write_file_content(routes_path, modified_content)
                 print("Resource routes added to config/routes.lua.")
             else
-                print("Warning: Could not automatically update config/routes.lua. Please add 'app:resources(\"" .. plural_name .. "\")' manually.")
+                print("Warning: Could not automatically update config/routes.lua. Please add '" .. resource_route .. "' manually.")
             end
         end
     else
