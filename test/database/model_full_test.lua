@@ -60,8 +60,8 @@ local Post = Model:extend({
     fillable = { "user_id", "title", "content" }
 })
 
-User:has_many("posts", { model = "Post" })
-Post:belongs_to("user", { model = "User" })
+User:has_many("posts", { model = Post })
+Post:belongs_to("user", { model = User })
 
 package.loaded["User"] = User
 package.loaded["Post"] = Post

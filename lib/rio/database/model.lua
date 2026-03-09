@@ -124,18 +124,29 @@ end
 -- ==========================
 
 local function get_related_model(path, name)
+    -- 1. Check if already loaded by path or name
     local mod = package.loaded[path] or package.loaded[name]
-    if not mod then local ok, res = pcall(require, path); if ok then mod = res end end
-    return mod
+    if mod then return mod end
+
+    -- 2. Try to require it
+    local ok, res = pcall(require, path)
+    if ok then return res end
+
+    -- 3. Look in global scope (useful for tests)
+    local camel_name = string_utils.camel_case(name)
+    if _G[camel_name] then return _G[camel_name] end
+    if _G[name] then return _G[name] end
+
+    return nil
 end
 
 function Model:belongs_to(name, options)
     options = options or {}
-    local path = options.model or ("app.models." .. name)
+    local path = options.model_path or ("app.models." .. name)
     self._relations[name] = {
-        metadata = { type = "belongs_to", model_path = path, foreign_key = options.foreign_key, primary_key = options.primary_key },
+        metadata = { type = "belongs_to", model_path = path, foreign_key = options.foreign_key, primary_key = options.primary_key, dependent = options.dependent },
         fn = function(inst)
-            local Rel = get_related_model(path, name)
+            local Rel = (type(options.model) == "table") and options.model or get_related_model(path, name)
             return inst:belongsTo(Rel, options.foreign_key, options.primary_key, name)
         end
     }
@@ -144,14 +155,14 @@ end
 function Model:has_many(name, options)
     options = options or {}
     local singular = string_utils.singularize(name)
-    local path = options.model or ("app.models." .. singular)
+    local path = options.model_path or ("app.models." .. singular)
     local ModelClass = self
     self._relations[name] = {
-        metadata = { type = "has_many", model_path = path, foreign_key = options.foreign_key, through = options.through, source = options.source or singular },
+        metadata = { type = "has_many", model_path = path, foreign_key = options.foreign_key, through = options.through, source = options.source or singular, dependent = options.dependent },
         fn = function(inst)
             if options.through then
-                local Target = get_related_model(path, singular)
                 local trel = ModelClass._relations[options.through]
+                local Target = (type(options.model) == "table") and options.model or get_related_model(path, singular)
                 local ThroughModel = get_related_model(trel.metadata.model_path, string_utils.singularize(options.through))
                 local tfk = (options.source or singular) .. "_id"
                 local pfk = (string_utils.singularize(ModelClass.table_name or "") .. "_id")
@@ -159,7 +170,7 @@ function Model:has_many(name, options)
                     :join(ThroughModel.table_name, ThroughModel.table_name .. "." .. tfk, "=", Target.table_name .. ".id")
                     :where(ThroughModel.table_name .. "." .. pfk, inst.id)
             end
-            local Rel = get_related_model(path, singular)
+            local Rel = (type(options.model) == "table") and options.model or get_related_model(path, singular)
             return inst:hasMany(Rel, options.foreign_key, options.local_key)
         end
     }
@@ -167,11 +178,11 @@ end
 
 function Model:has_one(name, options)
     options = options or {}
-    local path = options.model or ("app.models." .. name)
+    local path = options.model_path or ("app.models." .. name)
     self._relations[name] = {
-        metadata = { type = "has_one", model_path = path, foreign_key = options.foreign_key },
+        metadata = { type = "has_one", model_path = path, foreign_key = options.foreign_key, dependent = options.dependent },
         fn = function(inst)
-            local Rel = get_related_model(path, name)
+            local Rel = (type(options.model) == "table") and options.model or get_related_model(path, name)
             return inst:hasOne(Rel, options.foreign_key, options.local_key)
         end
     }
@@ -247,6 +258,28 @@ end
 
 function Model:delete()
     if not self._exists then return false end
+    
+    -- Handle dependent deletion
+    local relations = self.class._relations or {}
+    for name, rel in pairs(relations) do
+        if rel.metadata and rel.metadata.dependent == "destroy" then
+            local associated = self[name]
+            if associated then
+                if rel.metadata.type == "has_many" then
+                    -- For has_many, associated is a query builder, we need to get results
+                    local items = type(associated) == "table" and associated.get and associated:get() or associated
+                    if type(items) == "table" then
+                        for _, item in ipairs(items) do
+                            if type(item) == "table" and item.delete then item:delete() end
+                        end
+                    end
+                elseif type(associated) == "table" and associated.delete then
+                    associated:delete()
+                end
+            end
+        end
+    end
+
     local id = self[self.primary_key or "id"]
     local ok
     if self.class.soft_deletes then
@@ -280,6 +313,7 @@ end
 -- ==========================
 
 function Model:hasMany(Rel, fk, lk)
+    if not Rel then error("Association Error: Could not resolve related Model. Ensure the model is required or correctly named.") end
     local lk_field = lk or self.primary_key or "id"
     local fk_field = fk or (string_utils.singularize(self.class.table_name or "") .. "_id")
     local val = self[lk_field]
@@ -290,11 +324,13 @@ function Model:hasMany(Rel, fk, lk)
 end
 
 function Model:hasOne(Rel, fk, lk)
+    if not Rel then error("Association Error: Could not resolve related Model. Ensure the model is required or correctly named.") end
     local fk_field = fk or (string_utils.singularize(self.class.table_name or "") .. "_id")
     return Rel:query():where(fk_field, self[lk or self.primary_key or "id"]):first()
 end
 
 function Model:belongsTo(Rel, fk, pk, name)
+    if not Rel then error("Association Error: Could not resolve related Model. Ensure the model is required or correctly named.") end
     local fk_field = fk or (name and name .. "_id") or (string_utils.singularize(Rel.table_name or "") .. "_id")
     return Rel:find(self[fk_field])
 end

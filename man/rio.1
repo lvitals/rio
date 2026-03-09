@@ -1,4 +1,4 @@
-.Dd March 5, 2026
+.Dd March 9, 2026
 .Dt RIO 1
 .Os
 .Sh NAME
@@ -107,14 +107,22 @@ Generators create boilerplate code, while destructors remove it.
 .Bl -tag -width "generate scaffold"
 .It Cm generate scaffold Ar Name Op Ar fields
 Creates a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
+Supports namespaces using
+.Ar ::
+(e.g.,
+.Ar Admin::Post ) .
+Controllers and views will be organized into subdirectories.
 .It Cm generate resource Ar Name Op Ar fields
-Creates a scaffold without the Views.
+Creates a scaffold without the Views. Supports namespaces.
 .It Cm generate | destroy model Ar Name Op Ar fields
 Creates or removes a Model and its corresponding Migration.
+Models are created in the flat
+.Pa app/models/
+directory.
 .It Cm generate | destroy migration Ar Name Op Ar fields
 Creates or removes a database migration file.
 .It Cm generate | destroy controller Ar Name Op Ar actions
-Creates or removes a Controller and its corresponding Tests.
+Creates or removes a Controller and its corresponding Tests. Supports namespaces.
 .It Cm generate channel Ar Name
 Creates a WebSocket channel and adds its route.
 .El
@@ -143,7 +151,7 @@ Populates initial data (replant clears tables first).
 .It Cm db:cache:clear
 Clears database metadata and logical caches.
 .It Cm db:system:change Fl -to= Ar adapter
-Changes the database adapter in config/database.lua.
+Interactively changes the database adapter in config/database.lua.
 .El
 .Sh MAINTENANCE AND MAILBOX
 .Bl -tag -width "mailbox:ingress:provider"
@@ -168,8 +176,40 @@ Sets up the Mailbox system (folders, base class, and migrations).
 .It Cm mailbox:ingress: Ar provider
 Relay an inbound email from a provider (postfix, exim, qmail) to Rio.
 .El
+.Sh ROUTING
+Routes are defined in
+.Pa config/routes.lua .
+.Ss Basic Methods
+.Bl -tag -width "app:resources(name, [controller])"
+.It Cm app:get(path, handler)
+.It Cm app:post(path, handler)
+.It Cm app:put(path, handler)
+.It Cm app:patch(path, handler)
+.It Cm app:delete(path, handler)
+.It Cm app:ws(path, channel)
+.El
+.Ss Grouping and Resources
+.Bl -tag -width "app:resources(name, [controller])"
+.It Cm app:group(prefix, function(app) ... end)
+Nests routes under a common URI prefix.
+.It Cm app:resources(name, [controller])
+Generates RESTful routes for a resource (index, show, new, edit, create, update, destroy).
+.El
 .Sh ACTIVE RECORD ORM
 The Rio ORM manages complex relationships and database persistence.
+.Ss Configuration
+.Bl -tag -width "primary_key"
+.It Sy table_name
+Explicitly set the database table name.
+.It Sy primary_key
+Set the primary key (default: "id").
+.It Sy timestamps
+Enable/disable created_at and updated_at (default: true).
+.It Sy soft_deletes
+When true, records are marked as deleted instead of being removed.
+.It Sy per_page
+Default records per page for pagination (default: 5).
+.El
 .Ss Relationships
 .Bl -tag -width "has_many :through"
 .It Cm has_one
@@ -185,6 +225,16 @@ Defines N:M relationships via a join table.
 The
 .Ar dependent = "destroy"
 option ensures that child records are deleted when the parent is removed.
+.Ss Hooks and Transactions
+.Bl -tag -width "before_save, before_create, before_update"
+.It Sy before_save , before_create , before_update
+Callback functions called during the record lifecycle.
+.It Cm Model.transaction(cb)
+Executes a callback within a database transaction.
+.El
+.Ss Validations
+Supported rules:
+.Ar presence , uniqueness , format , length , numericality .
 .Sh SECURITY AND AUTHENTICATION
 Rio focuses on three pillars of security: Hashing, JWT, and Data Protection.
 .Ss Password Hashing
