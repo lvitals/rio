@@ -17,8 +17,9 @@ describe("ActiveRecord Query Cache", function()
             database = ":memory:"
         })
 
-        -- Create test table
-        DBManager.query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+        -- Create test table if not exists and clean it
+        DBManager.query("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)")
+        DBManager.query("DELETE FROM users")
         DBManager.query("INSERT INTO users (id, name) VALUES (1, 'Test User')")
 
         User = Model:extend({

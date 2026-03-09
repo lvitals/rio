@@ -397,11 +397,17 @@ local function generate_channel(channel_name)
 end
 
 local function generate_controller(controller_name, actions, api_only)
-    local path = "app/controllers/" .. underscore(controller_name) .. "_controller.lua"
+    local underscored_name = underscore(controller_name:gsub("::", "/"))
+    local path = "app/controllers/" .. underscored_name .. "_controller.lua"
+    
+    -- Ensure directory exists
+    local dir = path:match("(.+)/")
+    if dir then create_dir_if_not_exists(dir) end
+    
     print("Generating controller: " .. path .. (api_only and " (API-only)" or ""))
 
     local content = {}
-    local camelControllerName = camel_case(controller_name)
+    local camelControllerName = camel_case(controller_name:match("([^:]+)$") or controller_name)
     table.insert(content, "local " .. camelControllerName .. "Controller = {}")
     table.insert(content, "")
 
@@ -423,10 +429,13 @@ local function generate_controller(controller_name, actions, api_only)
     print("Controller '" .. controller_name .. "' generated successfully.")
 
     -- Generate test file for the controller
-    local test_path = "test/controllers/" .. underscore(controller_name) .. "_test.lua"
+    local test_path = "test/controllers/" .. underscored_name .. "_test.lua"
+    local test_dir = test_path:match("(.+)/")
+    if test_dir then create_dir_if_not_exists(test_dir) end
+    
     print("Generating controller test: " .. test_path)
     local test_content = {}
-    table.insert(test_content, "local " .. camelControllerName .. "Controller = require(\"app.controllers." .. underscore(controller_name) .. "_controller\")")
+    table.insert(test_content, "local " .. camelControllerName .. "Controller = require(\"app.controllers." .. underscored_name .. "_controller\")")
 
     table.insert(test_content, "")
     table.insert(test_content, "describe(\"" .. camelControllerName .. "Controller\", function()")

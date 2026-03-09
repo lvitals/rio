@@ -98,7 +98,7 @@ function M.create(app, options)
                             action_name = meta.action
 
                             -- Attempt to load controller to find openapi table
-                            local controller_module = controller_name:lower()
+                            local controller_module = controller_name:gsub("::", "."):lower()
                             if not controller_module:find("_controller$") then
                                 controller_module = controller_module .. "_controller"
                             end

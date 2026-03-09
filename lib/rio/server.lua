@@ -70,7 +70,7 @@ function Server:_to_handler(handler)
         local cn, an = handler:match("^([^#@]+)[#@]([^#@]+)$")
         if cn and an then
             local sh = function(ctx)
-                local mod = string_utils.underscore(cn)
+                local mod = string_utils.underscore(cn:gsub("::", "."))
                 if not mod:find("_controller$") then mod = mod .. "_controller" end
                 local ctrl = require("app.controllers." .. mod)
                 return ctrl[an](ctrl, ctx)
