@@ -2,31 +2,66 @@
 -- SQLite adapter for the Rio database manager.
 
 local BaseAdapter = require("rio.database.adapters.base")
+local DB = require("rio.database.manager")
 local SQLiteAdapter = {}
 for k, v in pairs(BaseAdapter) do SQLiteAdapter[k] = v end
 SQLiteAdapter.__index = SQLiteAdapter
 
+function SQLiteAdapter:new(config)
+    local o = setmetatable(BaseAdapter:new(config), self)
+    o.config = config
+    return o
+end
+
 function SQLiteAdapter:get_driver_name() return "sqlite3" end
 function SQLiteAdapter:get_luasql_module() return "luasql.sqlite3" end
 
-function SQLiteAdapter:connect()
+-- Do NOT use a shared environment, instead create it fresh per connection
+-- to completely isolate connections and avoid 'environment is closed' C-level crashes
+function SQLiteAdapter:initialize()
+    BaseAdapter.initialize(self)
+end
+
+function SQLiteAdapter:connect(config)
+    local cfg = config or self.config
+    if not cfg then return nil, "Configuration missing" end
+
     if not self.driver then self:initialize() end
     if not self.driver then return nil, "Driver not found" end
     
-    local env_obj = self.driver.sqlite3()
-    local db_file = self.config.database
-    
-    -- Ensure directory exists
-    local dir = db_file:match("(.+)/")
-    if dir then os.execute("mkdir -p " .. dir) end
+    local db_file = cfg.database
+    if not db_file then return nil, "Database file not specified" end
 
-    local conn, err = env_obj:connect(db_file)
+    -- Create a brand new environment for this connection to avoid state/lock carryover
+    local env = self.driver.sqlite3()
+    if not env then return nil, "Failed to initialize LuaSQL SQLite environment" end
+
+    local conn, err = env:connect(db_file)
     if not conn then
-        if env_obj and env_obj.close then env_obj:close() end
+        if env and env.close then pcall(env.close, env) end
         return nil, "Connection failed: " .. (err or "unknown error")
     end
     
-    return conn, env_obj
+    -- Set busy timeout to handle concurrent access better
+    pcall(function() 
+        conn:execute("PRAGMA busy_timeout = 5000;")
+    end)
+
+    return conn, env
+end
+
+function SQLiteAdapter:release_connection(conn, env)
+    if not conn then return end
+    
+    if self.pool_size < self.MAX_POOL_SIZE then
+        table.insert(self.connection_pool, {conn, env})
+        self.pool_size = self.pool_size + 1
+    else
+        pcall(conn.close, conn)
+        if env and env.close then
+            pcall(env.close, env)
+        end
+    end
 end
 
 -- Rules
@@ -232,25 +267,60 @@ function SQLiteAdapter:remove_migration_record(conn, name)
 end
 
 -- Management
+function SQLiteAdapter.disconnect()
+    if instance then
+        if instance.connection_pool then
+            for _, conn_pair in ipairs(instance.connection_pool) do
+                local conn = conn_pair[1]
+                local env = conn_pair[2]
+                if conn and conn.close then pcall(conn.close, conn) end
+                if env and env.close then pcall(env.close, env) end
+            end
+            instance.connection_pool = {}
+            instance.pool_size = 0
+        end
+        instance = nil
+    end
+    collectgarbage("collect")
+end
+
 function SQLiteAdapter:create_database(db_config)
-    self.config = db_config
-    local conn, env = self:connect()
+    local db_file = db_config.database
+    if not db_file then return false, "No database file specified" end
+
+    -- Ensure any existing connections are closed and locks released
+    SQLiteAdapter.disconnect()
+
+    -- Rely on LuaSQL to create the file if it doesn't exist upon connection
+    local adapter = SQLiteAdapter:new(db_config)
+    local conn, env = adapter:connect(db_config)
     if conn then
         conn:close()
         if env and env.close then env:close() end
-        print("✓ Database file ensured: " .. db_config.database)
+        if DB.verbose then print("✓ Database file ensured: " .. db_file) end
         return true
     else
-        return false, (env or "unknown error")
+        return false, "Could not initialize database file: " .. tostring(env)
     end
 end
 
 function SQLiteAdapter:drop_database(db_config)
-    if os.remove(db_config.database) then
-        print("✓ Deleted: " .. db_config.database)
+    local db_file = db_config.database
+    if not db_file then return false, "No database file specified" end
+
+    -- Double check disconnect was called
+    SQLiteAdapter.disconnect()
+
+    local ok, err = os.remove(db_file)
+    if ok then
+        if DB.verbose then print("✓ Deleted: " .. db_file) end
         return true
     else
-        return false, "File not found"
+        -- If file doesn't exist, we consider it "dropped" successfully
+        if tostring(err):lower():find("no such file") then
+            return true
+        end
+        return false, err
     end
 end
 
@@ -263,7 +333,7 @@ local function get_instance(cfg)
             driver = nil,
             connection_pool = {},
             pool_size = 0,
-            MAX_POOL_SIZE = (cfg and cfg.pool) or 10
+            MAX_POOL_SIZE = (cfg and cfg.pool) or 0 -- No pooling by default for SQLite
         }, SQLiteAdapter)
         instance:initialize()
     end

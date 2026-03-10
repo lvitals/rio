@@ -1,20 +1,21 @@
 local User = require("app.models.user")
 local Task = require("app.models.task")
+local ui = require("rio.utils.ui")
 
-print("Cleaning database...")
+ui.info("Cleaning database...")
 Task:raw("DELETE FROM tasks")
 User:raw("DELETE FROM users")
 
-print("Creating admin user...")
+ui.info("Creating admin user...")
 local admin = User:create({
     username = "admin",
     password = "password123",
-    password_confirmation = "password123", -- Requerido pela nova validação!
+    password_confirmation = "password123",
     email = "admin@example.com",
     is_admin = true
 })
 
-print("Creating sample tasks...")
+ui.info("Creating sample tasks...")
 Task:create({
     title = "Install Rio Framework",
     description = "Follow the installation guide in INSTALL.md",
@@ -33,8 +34,7 @@ Task:create({
     status = "pending"
 })
 
-print("-----------------------------------------------")
-print("Seeding completed successfully!")
-print("Users: " .. User:count())
-print("Tasks: " .. Task:count())
-print("-----------------------------------------------")
+ui.box("Seeding Summary", function()
+    ui.status("Users created", true, User:count())
+    ui.status("Tasks created", true, Task:count())
+end)

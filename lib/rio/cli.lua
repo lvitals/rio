@@ -2180,7 +2180,7 @@ local function get_db_config_and_run(fn_name)
     -- Call the Migrate method
     if type(Migrate[fn_name]) == "function" then
         ui.header("Database Operation: " .. fn_name)
-        if fn_name == "create" or fn_name == "drop" or fn_name == "setup" or fn_name == "reset" then
+        if fn_name == "create" or fn_name == "drop" or fn_name == "setup" or fn_name == "reset" or fn_name == "run" then
             Migrate[fn_name](current_env_config)
         else
             Migrate[fn_name]()

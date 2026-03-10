@@ -100,11 +100,41 @@ function Model:new(attributes)
             if attr ~= nil then return attr end
             local class_val = ModelClass[k]
             if class_val ~= nil then return class_val end
+            
+            -- Relationship resolving (e.g. user.profile)
             local rel = ModelClass._relations and ModelClass._relations[k]
             if rel and rel.fn then
                 if not t._relations_loaded[k] then t._relations_loaded[k] = rel.fn(t) end
                 return t._relations_loaded[k]
             end
+            
+            -- Dynamic association methods (e.g. create_profile, build_profile)
+            if type(k) == "string" then
+                local action, rel_name = k:match("^(build)_(.+)$")
+                if not action then action, rel_name = k:match("^(create)_(.+)$") end
+                
+                if action and rel_name then
+                    local assoc = ModelClass._relations and ModelClass._relations[rel_name]
+                    if assoc and assoc.metadata and assoc.metadata.type == "has_one" then
+                        return function(self_inst, attrs)
+                            attrs = attrs or {}
+                            local fk_field = assoc.metadata.foreign_key or (string_utils.singularize(ModelClass.table_name or "") .. "_id")
+                            local lk_field = assoc.metadata.local_key or ModelClass.primary_key or "id"
+                            attrs[fk_field] = self_inst[lk_field]
+                            
+                            local Rel = (type(assoc.metadata.model) == "table") and assoc.metadata.model or require(assoc.metadata.model_path)
+                            local new_inst = Rel:new(attrs)
+                            
+                            self_inst._relations_loaded[rel_name] = new_inst
+                            if action == "create" then
+                                new_inst:save()
+                            end
+                            return new_inst
+                        end
+                    end
+                end
+            end
+            
             return nil
         end,
         __newindex = function(t, k, v)

@@ -24,8 +24,8 @@ User.validates = {
 
 -- Custom validation for password confirmation
 function User:validate()
-    -- Run standard validations first
-    local ok = self.class.class.__index.validate(self)
+    -- Run standard validations first (from Model base class)
+    local ok = Model.validate(self)
     
     -- Custom presence for password: only required if NEW record
     if not self._exists and (not self.password or self.password == "") then

@@ -2,9 +2,16 @@
 -- PostgreSQL adapter for the Rio database manager using LuaSQL.
 
 local BaseAdapter = require("rio.database.adapters.base")
+local DB = require("rio.database.manager")
 local PostgresAdapter = {}
 for k, v in pairs(BaseAdapter) do PostgresAdapter[k] = v end
 PostgresAdapter.__index = PostgresAdapter
+
+function PostgresAdapter:new(config)
+    local o = setmetatable(BaseAdapter:new(config), self)
+    o.config = config
+    return o
+end
 
 function PostgresAdapter:get_driver_name() return "postgres" end
 function PostgresAdapter:get_luasql_module() return "luasql.postgres" end
@@ -189,23 +196,25 @@ end
 
 -- Database Management
 function PostgresAdapter:create_database(db_config)
-    if not self.driver then self:initialize() end
-    if not self.driver then return false, "PostgreSQL driver not found" end
     local temp_cfg = {}
     for k,v in pairs(db_config) do temp_cfg[k] = v end
     temp_cfg.database = "postgres"
-    self.config = temp_cfg
-    local conn, env = self:connect()
+    
+    local adapter = PostgresAdapter:new(temp_cfg)
+    local conn, env = adapter:connect()
     if not conn then return false, (env or "unknown error") end
     local sql = string.format("CREATE DATABASE %s ENCODING '%s'", db_config.database, db_config.charset or "UTF8")
     local ok, exec_err = conn:execute(sql)
     conn:close()
     if env and env.close then env:close() end
     if not ok then 
-        if tostring(exec_err):find("already exists") then print("✓ Already exists.") return true end
+        if tostring(exec_err):find("already exists") then 
+            if DB and DB.verbose then print("✓ Already exists.") end
+            return true 
+        end
         return false, exec_err 
     end
-    print("✓ Created: " .. db_config.database)
+    if DB and DB.verbose then print("✓ Created: " .. db_config.database) end
     return true
 end
 
@@ -221,6 +230,20 @@ function PostgresAdapter:drop_database(db_config)
     conn:close()
     if env and env.close then env:close() end
     return ok, err
+end
+
+function PostgresAdapter.disconnect()
+    if instance and instance.pool then
+        for _, conn in ipairs(instance.pool) do
+            pcall(conn.close, conn)
+        end
+        instance.pool = {}
+    end
+    if instance and instance.env then
+        pcall(instance.env.close, instance.env)
+        instance.env = nil
+    end
+    instance = nil
 end
 
 -- Migration Tracking

@@ -262,8 +262,18 @@ function M.create_database(config)
     return nil, "Database adapter does not support direct creation."
 end
 
+-- Closes all connections in the pool
+function M.disconnect()
+    if active_adapter and active_adapter.disconnect then
+        active_adapter.disconnect()
+    end
+end
+
 -- Drops the database if supported by the adapter
 function M.drop_database(config)
+    -- Ensure pool is closed before dropping (critical for SQLite)
+    M.disconnect()
+
     if not active_adapter then
         local adapter_name = config.adapter
         local ok, adapter_module = pcall(require, "rio.database.adapters." .. adapter_name)

@@ -2,9 +2,16 @@
 -- MySQL adapter for the Rio database manager.
 
 local BaseAdapter = require("rio.database.adapters.base")
+local DB = require("rio.database.manager")
 local MySQLAdapter = {}
 for k, v in pairs(BaseAdapter) do MySQLAdapter[k] = v end
 MySQLAdapter.__index = MySQLAdapter
+
+function MySQLAdapter:new(config)
+    local o = setmetatable(BaseAdapter:new(config), self)
+    o.config = config
+    return o
+end
 
 function MySQLAdapter:get_driver_name() return "mysql" end
 function MySQLAdapter:get_luasql_module() return "luasql.mysql" end
@@ -180,31 +187,22 @@ end
 
 -- Database Management
 function MySQLAdapter:create_database(db_config)
-    if not self.driver then self:initialize() end
-    if not self.driver then return false, "Driver not found" end
-
-    local env_obj = self.driver.mysql()
-    local conn, err = env_obj:connect(
-        "", -- Connect without a specific database
-        db_config.username,
-        db_config.password,
-        db_config.host,
-        db_config.port
-    )
+    local master_cfg = {}
+    for k, v in pairs(db_config) do master_cfg[k] = v end
+    master_cfg.database = "" -- Connect without specific DB
     
-    if not conn then
-        if env_obj and env_obj.close then env_obj:close() end
-        return false, "Connection failed: " .. (err or "unknown error")
-    end
+    local adapter = MySQLAdapter:new(master_cfg)
+    local conn, env = adapter:connect()
+    if not conn then return false, (env or "unknown error") end
     
     local charset = db_config.charset or "utf8mb4"
     local sql = string.format("CREATE DATABASE IF NOT EXISTS %s CHARACTER SET %s", db_config.database, charset)
     local ok, exec_err = conn:execute(sql)
     conn:close()
-    if env_obj and env_obj.close then env_obj:close() end
+    if env and env.close then env:close() end
     
     if not ok then return false, exec_err end
-    print("✓ MySQL database '" .. db_config.database .. "' ensured.")
+    if DB and DB.verbose then print("✓ MySQL database '" .. db_config.database .. "' ensured.") end
     return true
 end
 
@@ -232,6 +230,20 @@ function MySQLAdapter:drop_database(db_config)
     if not ok then return false, exec_err end
     print("✓ MySQL database '" .. db_config.database .. "' dropped.")
     return true
+end
+
+function MySQLAdapter.disconnect()
+    if instance and instance.pool then
+        for _, conn in ipairs(instance.pool) do
+            pcall(conn.close, conn)
+        end
+        instance.pool = {}
+    end
+    if instance and instance.env then
+        pcall(instance.env.close, instance.env)
+        instance.env = nil
+    end
+    instance = nil
 end
 
 -- Migration Tracking

@@ -2,35 +2,27 @@
 -- Compatible with Lua 5.1 and LuaSQL (SQLite, MySQL, PostgreSQL)
 
 local DB = require("rio.database.manager")
-
--- Colors for output
-local colors = {
-    reset = "\27[0m",
-    red = "\27[31m",
-    green = "\27[32m",
-    yellow = "\27[33m",
-    blue = "\27[34m",
-    dim = "\27[2m"
-}
+local ui = require("rio.utils.ui")
+local colors = ui.colors
 
 local function print_header(text)
-    if DB.verbose then print("\n" .. colors.blue .. "🌙 " .. text .. colors.reset .. "\n") end
+    if DB.verbose then ui.header(text) end
 end
 
 local function print_success(text)
-    if DB.verbose then print(colors.green .. "✓ " .. text .. colors.reset) end
+    if DB.verbose then ui.status(text, true) end
 end
 
 local function print_error(text)
-    print(colors.red .. "✗ " .. text .. colors.reset)
+    ui.status(text, false)
 end
 
 local function print_info(text)
-    if DB.verbose then print(colors.yellow .. "ℹ " .. text .. colors.reset) end
+    if DB.verbose then ui.info(text) end
 end
 
 local function print_debug(text)
-    if DB.verbose then print(colors.dim .. "  " .. text .. colors.reset) end
+    if DB.verbose then ui.text(text, colors.dim) end
 end
 
 local Migrate = {}
@@ -81,11 +73,11 @@ function Migrate.run()
         if name and not executed[name] then
             repeat -- Emulate continue
                 pending = pending + 1
-                print(colors.yellow .. "→ Migrating: " .. name .. colors.reset)
+                ui.header("Migrating: " .. name)
                 
                 local ok, mod = pcall(require, file:gsub("%.lua$", ""):gsub("/", "."))
                 if not ok then
-                    print_error("  Error loading: " .. tostring(mod))
+                    print_error("Error loading migration: " .. tostring(mod))
                     break
                 end
                 
@@ -95,7 +87,7 @@ function Migrate.run()
                 if type(sql) == "string" and sql ~= "" then
                     local res_ex, err_ex = conn:execute(sql)
                     if not res_ex then
-                        print_error("  Execution failed: " .. tostring(err_ex))
+                        print_error("Execution failed: " .. tostring(err_ex))
                         break
                     end
                 end
@@ -104,16 +96,15 @@ function Migrate.run()
                 adapter.record_migration(conn, name, current_batch)
                 if conn.commit then conn:commit() end
                 
-                print_success("  Migrated successfully!")
+                ui.status("Migration status", true, "Success")
             until true
         end
     end
     
     if pending == 0 then
-        print_info("Nothing to migrate.")
+        if DB.verbose then ui.info("No pending migrations found.") end
     else
-        print("")
-        print_success(string.format("Total: %d migration(s) executed", pending))
+        if DB.verbose then ui.status("Batch execution", true, string.format("Total: %d migration(s) executed", pending)) end
     end
 end
 
@@ -218,7 +209,7 @@ end
 
 -- Create database
 function Migrate.create(db_config)
-    print("Creating database...")
+    if DB.verbose then ui.info("Creating database...") end
     if not db_config then return end
     local ok, err = DB.create_database(db_config)
     if ok then print_success("Database created successfully.")
@@ -228,7 +219,7 @@ end
 
 -- Drop database
 function Migrate.drop(db_config)
-    print("Dropping database...")
+    if DB.verbose then ui.info("Dropping database...") end
     if not db_config then return end
     local ok, err = DB.drop_database(db_config)
     if ok then print_success("Database dropped successfully.")
@@ -244,50 +235,47 @@ function Migrate.seed()
         print_error(tostring(err or "Failed to connect to the database."))
         return
     end
-    
+
     local ok, err_req = pcall(require, "db.seeds")
     if ok then print_success("Database seeded successfully.")
-    else print_error("Error seeding database: " .. tostring(err_req)) end
+    else 
+        print("RAW SEED ERROR:")
+        print(tostring(err_req))
+        print_error("Error seeding database: " .. tostring(err_req)) 
+    end
 end
-
 -- Setup: Create + Migrate + Seed
 function Migrate.setup(db_config)
-    print_header("Setting up Database")
     Migrate.create(db_config)
-    Migrate.run()
+    Migrate.run(db_config)
     Migrate.seed()
-    print("\n" .. colors.green .. "Database setup complete." .. colors.reset)
+    if DB.verbose then ui.status("Full database setup", true, "Database is ready") end
 end
 
 -- Reset: Drop + Setup
 function Migrate.reset(db_config)
-    print_header("Resetting Database")
     Migrate.drop(db_config)
     Migrate.setup(db_config)
 end
 
 function Migrate.exec(args)
     local cmd = args[1] or "status"
-    if cmd == "migrate" or cmd == "up" then Migrate.run()
+    local ok_cfg, config_file = pcall(require, "config.database")
+    local env = os.getenv("RIO_ENV") or "development"
+    local db_config = (ok_cfg and config_file) and config_file[env] or nil
+
+    if cmd == "migrate" or cmd == "up" then Migrate.run(db_config)
     elseif cmd == "rollback" or cmd == "down" then Migrate.rollback()
     elseif cmd == "status" then Migrate.status()
     elseif cmd == "seed" then Migrate.seed()
     elseif cmd == "create" then 
-        local ok, config = pcall(require, "config.database")
-        local env = os.getenv("RIO_ENV") or "development"
-        if ok and config[env] then Migrate.create(config[env]) end
+        if db_config then Migrate.create(db_config) end
     elseif cmd == "drop" then
-        local ok, config = pcall(require, "config.database")
-        local env = os.getenv("RIO_ENV") or "development"
-        if ok and config[env] then Migrate.drop(config[env]) end
+        if db_config then Migrate.drop(db_config) end
     elseif cmd == "setup" then
-        local ok, config = pcall(require, "config.database")
-        local env = os.getenv("RIO_ENV") or "development"
-        if ok and config[env] then Migrate.setup(config[env]) end
+        if db_config then Migrate.setup(db_config) end
     elseif cmd == "reset" then
-        local ok, config = pcall(require, "config.database")
-        local env = os.getenv("RIO_ENV") or "development"
-        if ok and config[env] then Migrate.reset(config[env]) end
+        if db_config then Migrate.reset(db_config) end
     end
 end
 
@@ -317,7 +305,7 @@ function BaseMigration:get_sql_type(lua_type, options)
 end
 
 function BaseMigration:create_table(name, callback)
-    if DB.verbose then print("BaseMigration: Creating table: " .. name) end
+    if DB.verbose then ui.header("Creating table: " .. name) end
     local cols = {}
     
     -- PK from adapter
@@ -350,32 +338,53 @@ function BaseMigration:create_table(name, callback)
     local sql = "CREATE TABLE IF NOT EXISTS " .. name .. " (\n  " .. table.concat(cols, ",\n  ") .. "\n)"
     sql = sql .. self.adapter.get_table_options() .. ";"
     
-    print_debug("Generated SQL:\n" .. sql)
+    if DB.verbose then
+        ui.box("Generated SQL", function()
+            for line in sql:gmatch("[^\r\n]+") do
+                ui.text(line, colors.cyan)
+            end
+        end)
+    end
+
     local ok, err = self.conn:execute(sql)
     if not ok then error("Error creating table '" .. name .. "': " .. tostring(err)) end
-    if DB.verbose then print_success("  Table created successfully.") end
+    if DB.verbose then ui.status("Table status", true, "Created successfully") end
 end
 
 function BaseMigration:add_column(table_name, col_name, col_type, options)
     local typ_sql = self:get_sql_type(col_type, options)
     local sql = string.format("ALTER TABLE %s ADD COLUMN %s %s;", table_name, col_name, typ_sql)
-    print_debug("Executing SQL: " .. sql)
+    if DB.verbose then
+        ui.box("Executing SQL", function()
+            ui.text(sql, colors.cyan)
+        end)
+    end
     local ok, err = self.conn:execute(sql)
     if not ok then error("Error adding column: " .. tostring(err)) end
-    if DB.verbose then print_success("  Column '" .. col_name .. "' added.") end
+    if DB.verbose then ui.status("Column status", true, "'" .. col_name .. "' added to " .. table_name) end
 end
 
 function BaseMigration:remove_column(table_name, col_name)
     local sql = string.format("ALTER TABLE %s DROP COLUMN %s;", table_name, col_name)
-    print_debug("Executing SQL: " .. sql)
+    if DB.verbose then
+        ui.box("Executing SQL", function()
+            ui.text(sql, colors.cyan)
+        end)
+    end
     local ok, err = self.conn:execute(sql)
     if not ok then error("Error removing column: " .. tostring(err)) end
-    if DB.verbose then print_success("  Column '" .. col_name .. "' removed.") end
+    if DB.verbose then ui.status("Column status", true, "'" .. col_name .. "' removed from " .. table_name) end
 end
 
 function BaseMigration:drop_table(name)
-    self.conn:execute("DROP TABLE IF EXISTS " .. name .. ";")
-    if DB.verbose then print_success("  Table '" .. name .. "' dropped.") end
+    local sql = "DROP TABLE IF EXISTS " .. name .. ";"
+    if DB.verbose then
+        ui.box("Executing SQL", function()
+            ui.text(sql, colors.cyan)
+        end)
+    end
+    self.conn:execute(sql)
+    if DB.verbose then ui.status("Table status", true, "'" .. name .. "' dropped") end
 end
 
 function BaseMigration:change_table(name, callback)
