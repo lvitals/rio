@@ -53,9 +53,51 @@ function MySQLAdapter:query(sql, bindings)
     if not conn then return nil, env end
     
     local final_sql = escape_params(conn, sql, bindings)
-    local cur, err = conn:execute(final_sql)
+    local cur, err
+
+    -- Cooperative execution via cqueues and MariaDB async API
+    if conn.getfd and conn.send_query and conn.query_cont then
+        local ok, cq_err = pcall(require, "cqueues")
+        if ok and type(cq_err) == "table" and cq_err.poll then
+            local cqueues = cq_err
+            local fd = conn:getfd()
+            
+            -- Start query
+            local status, ret = conn:send_query(final_sql)
+            print("DEBUG: mysql send_query status=" .. tostring(status) .. " ret=" .. tostring(ret))
+            
+            -- Loop through statuses if needed (MariaDB async state machine)
+            while status ~= 0 do
+                local mode = "r"
+                if status == 2 then mode = "w" end -- MYSQL_WAIT_WRITE
+                
+                -- Wait for socket with a safety timeout
+                cqueues.poll(fd, mode, 0.01)
+                
+                -- Continue query
+                status, ret = conn:query_cont(status)
+                print("DEBUG: mysql query_cont status=" .. tostring(status) .. " ret=" .. tostring(ret))
+            end
+
+            if ret ~= 0 then
+                self:release_connection(conn, env)
+                return nil, "error executing async query"
+            end
+            
+            local res, res_err = conn:get_result()
+            if res_err then
+                self:release_connection(conn, env)
+                return nil, res_err
+            end
+            cur = res
+        else
+            cur, err = conn:execute(final_sql)
+        end
+    else
+        cur, err = conn:execute(final_sql)
+    end
     
-    if not cur then
+    if not cur and err then
         self:release_connection(conn, env)
         return nil, err
     end
