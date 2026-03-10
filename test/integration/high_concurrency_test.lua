@@ -1,7 +1,7 @@
 if not describe then
     print("\n" .. string.rep("=", 60))
     print("[ERROR] This test file must be run using the 'busted' test runner.")
-    print("Usage: busted " .. (arg and arg[0] or "test/high_concurrency_test.lua"))
+    print("Usage: busted " .. (arg and arg[0] or "test/integration/high_concurrency_test.lua"))
     print(string.rep("=", 60) .. "\n")
     os.exit(1)
 end
@@ -116,16 +116,17 @@ describe("Rio Framework High Concurrency Benchmark", function()
         local end_time = cqueues.monotime()
         local duration = end_time - start_time
 
-        print(string.format("\n  [Benchmark Performance]"))
-        print(string.format("  Total Requests: %d", REQUEST_COUNT))
-        print(string.format("  Successful:     %d", completed))
-        print(string.format("  Errors:         %d", errors_count))
-        print(string.format("  Time Elapsed:   %.4fs", duration))
-        print(string.format("  Throughput:     %.2f req/s", completed / duration))
-        
-        if errors_count > 0 then
-            print(string.format("  Last Recorded Error: %s", tostring(last_error)))
-        end
+        RioUI.box("High Concurrency Benchmark", function()
+            RioUI.status("Total Requests", true, REQUEST_COUNT)
+            RioUI.status("Successful", completed == REQUEST_COUNT, completed)
+            RioUI.status("Errors Detected", errors_count == 0, errors_count)
+            RioUI.status("Total Time", true, string.format("%.4fs", duration))
+            RioUI.status("Throughput", true, string.format("%.2f req/s", completed / duration))
+            
+            if errors_count > 0 then
+                RioUI.info("Last Error: " .. tostring(last_error))
+            end
+        end)
 
         -- Cleanup
         app:close()

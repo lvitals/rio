@@ -14,11 +14,11 @@ local colors = {
 }
 
 local function print_header(text)
-    print("\n" .. colors.blue .. "🌙 " .. text .. colors.reset .. "\n")
+    if DB.verbose then print("\n" .. colors.blue .. "🌙 " .. text .. colors.reset .. "\n") end
 end
 
 local function print_success(text)
-    print(colors.green .. "✓ " .. text .. colors.reset)
+    if DB.verbose then print(colors.green .. "✓ " .. text .. colors.reset) end
 end
 
 local function print_error(text)
@@ -26,11 +26,11 @@ local function print_error(text)
 end
 
 local function print_info(text)
-    print(colors.yellow .. "ℹ " .. text .. colors.reset)
+    if DB.verbose then print(colors.yellow .. "ℹ " .. text .. colors.reset) end
 end
 
 local function print_debug(text)
-    print(colors.dim .. "  " .. text .. colors.reset)
+    if DB.verbose then print(colors.dim .. "  " .. text .. colors.reset) end
 end
 
 local Migrate = {}
@@ -317,7 +317,7 @@ function BaseMigration:get_sql_type(lua_type, options)
 end
 
 function BaseMigration:create_table(name, callback)
-    print("BaseMigration: Creating table: " .. name)
+    if DB.verbose then print("BaseMigration: Creating table: " .. name) end
     local cols = {}
     
     -- PK from adapter
@@ -353,7 +353,7 @@ function BaseMigration:create_table(name, callback)
     print_debug("Generated SQL:\n" .. sql)
     local ok, err = self.conn:execute(sql)
     if not ok then error("Error creating table '" .. name .. "': " .. tostring(err)) end
-    print_success("  Table created successfully.")
+    if DB.verbose then print_success("  Table created successfully.") end
 end
 
 function BaseMigration:add_column(table_name, col_name, col_type, options)
@@ -362,7 +362,7 @@ function BaseMigration:add_column(table_name, col_name, col_type, options)
     print_debug("Executing SQL: " .. sql)
     local ok, err = self.conn:execute(sql)
     if not ok then error("Error adding column: " .. tostring(err)) end
-    print_success("  Column '" .. col_name .. "' added.")
+    if DB.verbose then print_success("  Column '" .. col_name .. "' added.") end
 end
 
 function BaseMigration:remove_column(table_name, col_name)
@@ -370,16 +370,16 @@ function BaseMigration:remove_column(table_name, col_name)
     print_debug("Executing SQL: " .. sql)
     local ok, err = self.conn:execute(sql)
     if not ok then error("Error removing column: " .. tostring(err)) end
-    print_success("  Column '" .. col_name .. "' removed.")
+    if DB.verbose then print_success("  Column '" .. col_name .. "' removed.") end
 end
 
 function BaseMigration:drop_table(name)
     self.conn:execute("DROP TABLE IF EXISTS " .. name .. ";")
-    print_success("  Table '" .. name .. "' dropped.")
+    if DB.verbose then print_success("  Table '" .. name .. "' dropped.") end
 end
 
 function BaseMigration:change_table(name, callback)
-    print("BaseMigration: Changing table: " .. name)
+    if DB.verbose then print("BaseMigration: Changing table: " .. name) end
     local mig = self
     local t = {}
     function t.string(_, n, o) mig:add_column(name, n, "string", o) end

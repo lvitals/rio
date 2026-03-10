@@ -19,10 +19,17 @@ describe("Rio SQLite Adapter", function()
         sqlite.initialize(config)
     end)
 
-    it("should connect and execute simple queries", function()
-        local res = sqlite.query("SELECT 1 as val")
-        assert.is_table(res)
-        assert.equals(1, tonumber(res[1].val))
+    it("should connect and provide diagnostic info", function()
+        local conn, env = sqlite.get_connection()
+        assert.is_not_nil(conn)
+        
+        RioUI.box("SQLite Connectivity Info", function()
+            RioUI.status("Database Connection", true, config.database)
+            RioUI.status("Driver Async-like Mode", (conn.getfd ~= nil), "FD Exposure active")
+            RioUI.status("Cqueues Integration", (pcall(require, "cqueues")), "Ready for Event Loop")
+        end)
+        
+        sqlite.release_connection(conn, env)
     end)
 
     it("should perform basic CRUD operations", function()

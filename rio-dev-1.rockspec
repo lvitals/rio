@@ -70,7 +70,8 @@ build = {
       ["rio.utils.mail"] = "lib/rio/utils/mail.lua",
       ["rio.utils.path"] = "lib/rio/utils/path.lua",
       ["rio.utils.string"] = "lib/rio/utils/string.lua",
-      ["rio.utils.tests"] = "lib/rio/utils/tests.lua"
+      ["rio.utils.tests"] = "lib/rio/utils/tests.lua",
+      ["rio.utils.ui"] = "lib/rio/utils/ui.lua"
    },
    install = {
       bin = {

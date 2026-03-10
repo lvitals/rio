@@ -1,3 +1,11 @@
+if not describe then
+    print("\n" .. string.rep("=", 60))
+    print("[ERROR] This test file must be run using the \"busted\" test runner.")
+    print("Usage: busted test/core/cache_test.lua")
+    print(string.rep("=", 60) .. "\n")
+    os.exit(1)
+end
+
 -- test/spec/cache_ttl_test.lua
 local rio = require("rio")
 local posix = require("posix.signal")
@@ -38,7 +46,7 @@ describe("Rio Application Cache (Level 2) with TTL", function()
         assert.equals(1, call_count)
 
         -- Wait for TTL to expire
-        print("  Waiting 2 seconds for memory cache TTL...")
+        RioUI.info("Waiting 2 seconds for memory cache TTL...")
         os.execute("sleep 2")
 
         -- Third call (after sleep): MISS, cache expired, executes callback
@@ -69,7 +77,7 @@ describe("Rio Application Cache (Level 2) with TTL", function()
         assert.equals(1, call_count)
 
         -- Wait for TTL
-        print("  Waiting 2 seconds for file cache TTL...")
+        RioUI.info("Waiting 2 seconds for file cache TTL...")
         os.execute("sleep 2")
 
         -- Third call: MISS

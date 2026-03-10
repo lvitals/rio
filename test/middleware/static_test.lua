@@ -1,3 +1,11 @@
+if not describe then
+    print("\n" .. string.rep("=", 60))
+    print("[ERROR] This test file must be run using the \"busted\" test runner.")
+    print("Usage: busted test/middleware/static_test.lua")
+    print(string.rep("=", 60) .. "\n")
+    os.exit(1)
+end
+
 local static_mw = require("rio.middleware.static")
 
 describe("Rio Static Middleware", function()

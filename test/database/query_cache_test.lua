@@ -1,3 +1,11 @@
+if not describe then
+    print("\n" .. string.rep("=", 60))
+    print("[ERROR] This test file must be run using the \"busted\" test runner.")
+    print("Usage: busted test/database/query_cache_test.lua")
+    print(string.rep("=", 60) .. "\n")
+    os.exit(1)
+end
+
 local DBManager = require("rio.database.manager")
 local Model = require("rio.database.model")
 
@@ -79,14 +87,13 @@ describe("ActiveRecord Query Cache", function()
             for i=1, 100 do User:all() end
             local time_cache = os.clock() - start_cache
 
-            print("\n" .. string.rep("-", 40))
-            print("QUERY CACHE PERFORMANCE INFO (Level 1)")
-            print(string.format("  No Cache (100 queries): %.6fs", time_no_cache))
-            print(string.format("  Cache Hit (100 queries): %.6fs", time_cache))
-            if time_cache > 0 then
-                print(string.format("  Speedup: %.1fx faster", time_no_cache / time_cache))
-            end
-            print(string.rep("-", 40) .. "\n")
+            RioUI.box("Query Cache Performance (Level 1)", function()
+                RioUI.status("No Cache (100 queries)", true, string.format("%.6fs", time_no_cache))
+                RioUI.status("Cache Hit (100 queries)", true, string.format("%.6fs", time_cache))
+                if time_cache > 0 then
+                    RioUI.status("Speedup Factor", true, string.format("%.1fx faster", time_no_cache / time_cache))
+                end
+            end)
             
             assert.is_true(time_cache < time_no_cache)
         end)

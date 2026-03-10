@@ -1,13 +1,13 @@
--- test/repro_openapi.lua
+-- test/integration/openapi_repro_test.lua
 local script_path = debug.getinfo(1, "S").source:sub(2)
 local script_dir = script_path:match("(.*/)") or "./"
 
 -- Setup environment like Showcase API
-package.path = script_dir .. "../lib/?.lua;" .. 
-               script_dir .. "../lib/?/init.lua;" ..
-               script_dir .. "../samples/rio_showcase_api/?.lua;" ..
-               script_dir .. "../samples/rio_showcase_api/app/?.lua;" ..
-               script_dir .. "../samples/rio_showcase_api/app/?/init.lua;" ..
+package.path = script_dir .. "../../lib/?.lua;" .. 
+               script_dir .. "../../lib/?/init.lua;" ..
+               script_dir .. "../../samples/rio_showcase_api/?.lua;" ..
+               script_dir .. "../../samples/rio_showcase_api/app/?.lua;" ..
+               script_dir .. "../../samples/rio_showcase_api/app/?/init.lua;" ..
                package.path
 
 local rio = require("rio")

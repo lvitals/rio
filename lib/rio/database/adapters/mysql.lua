@@ -64,7 +64,6 @@ function MySQLAdapter:query(sql, bindings)
             
             -- Start query
             local status, ret = conn:send_query(final_sql)
-            print("DEBUG: mysql send_query status=" .. tostring(status) .. " ret=" .. tostring(ret))
             
             -- Loop through statuses if needed (MariaDB async state machine)
             while status ~= 0 do
@@ -76,7 +75,6 @@ function MySQLAdapter:query(sql, bindings)
                 
                 -- Continue query
                 status, ret = conn:query_cont(status)
-                print("DEBUG: mysql query_cont status=" .. tostring(status) .. " ret=" .. tostring(ret))
             end
 
             if ret ~= 0 then

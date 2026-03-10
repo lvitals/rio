@@ -6,20 +6,11 @@ local unpack = compat.unpack
 
 local socket_ok, socket = pcall(require, "socket")
 
-local colors = {
-    reset = "\27[0m",
-    red = "\27[31m",
-    green = "\27[32m",
-    yellow = "\27[33m",
-    blue = "\27[34m",
-    magenta = "\27[35m",
-    cyan = "\27[36m",
-    white = "\27[37m",
-    bold = "\27[1m",
-    dim = "\27[2m"
-}
+local ui = require("rio.utils.ui")
+local colors = ui.colors
 
 cli.colors = colors
+cli.ui = ui
 
 --- Checks if a port is free for binding (listening)
 -- @param port The port number to check (e.g., 8080)
@@ -1850,13 +1841,13 @@ end
 
 
 local function run_tests(test_args)
-    print("Running Rio tests with Busted...")
+    ui.header("Running Rio tests with Busted")
     local effective_lua_path, effective_lua_cpath = get_lua_paths()
 
     -- Ensure busted executable is found in common luarocks bin folders
     local home = os.getenv("HOME") or os.getenv("USERPROFILE") or "."
     local busted_path_addition = home .. "/.luarocks/bin"
-    
+
     local command_args_str = table.concat(test_args, " ")
     if command_args_str == "" then
         -- Default to running all tests in the 'test/' directory with _test.lua pattern
@@ -1864,14 +1855,13 @@ local function run_tests(test_args)
     end
 
     local command = string.format(
-        "LUA_PATH='%s;%s' LUA_CPATH='%s' RIO_ENV='test' RIO_HASH_ITERATIONS='1' PATH='%s:%s' busted --helper=test/spec_helper.lua %s",
+        "LUA_PATH='%s;%s' LUA_CPATH='%s' RIO_ENV='test' RIO_HASH_ITERATIONS='1' PATH='%s:%s' busted --output=utfTerminal --helper=test/spec_helper.lua %s",
         rio_framework_lib_path_global, effective_lua_path, effective_lua_cpath, busted_path_addition, os.getenv("PATH") or "", command_args_str
     )
-    
+
     -- Execute the command
     os.execute(command)
 end
-
 function generate_database_content(database_adapter, project_name, config)
     config = config or {}
     local database_content = ""
@@ -2189,13 +2179,14 @@ local function get_db_config_and_run(fn_name)
 
     -- Call the Migrate method
     if type(Migrate[fn_name]) == "function" then
+        ui.header("Database Operation: " .. fn_name)
         if fn_name == "create" or fn_name == "drop" or fn_name == "setup" or fn_name == "reset" then
             Migrate[fn_name](current_env_config)
         else
             Migrate[fn_name]()
         end
     else
-        print("Error: Migration method '" .. fn_name .. "' not found.")
+        ui.status("Database command execution", false, "Method '" .. fn_name .. "' not found.")
     end
 
     -- Restore paths
@@ -2942,7 +2933,7 @@ local function rm_middleware(name)
 end
 
 local function run_about()
-    print("About your application's environment")
+    ui.header("Application Environment")
     
     local effective_lua_path, effective_lua_cpath = get_lua_paths()
     local original_package_path = package.path
@@ -2977,7 +2968,7 @@ local function run_about()
     -- Environment
     local environment = os.getenv("RIO_ENV") or "development"
 
-    -- Database info (don't trigger interactive setup)
+    -- Database info
     local original_path_for_db = package.path
     package.path = "./config/?.lua;" .. original_path_for_db
     local db_config_status, db_config = pcall(require, "config.database")
@@ -2989,15 +2980,12 @@ local function run_about()
     if db_config_status and type(db_config) == "table" and db_config[environment] then
         adapter = db_config[environment].adapter or "Unknown"
         
-        -- Try to get schema version without triggering interactive setup
         local status_conn, conn, adapter_mod = pcall(get_db_connection, db_config, environment)
         if status_conn and conn then
-            -- Note: In Rio, migrations are stored in 'migrations' table, 'migration' column
             local res_status, res = pcall(conn.execute, conn, "SELECT migration FROM migrations ORDER BY migration DESC LIMIT 1")
             if res_status and res and res.fetch then
                 local row = res:fetch({}, "a")
                 if row and row.migration then
-                    -- Extract timestamp from "YYYYMMDDHHMMSS_name"
                     schema_version = row.migration:match("^(%d+)") or row.migration
                 end
                 res:close()
@@ -3008,43 +2996,47 @@ local function run_about()
         end
     end
 
-    print(string.format("%-25s %s", "Rio version", rio_version))
-    print(string.format("%-25s %s", "Lua version", lua_version))
-    print(string.format("%-25s %s", "LuaRocks version", luarocks_version))
-    print(string.format("%-25s %s", "Middleware", middleware_str))
-    print(string.format("%-25s %s", "Application root", app_root))
-    print(string.format("%-25s %s", "Environment", environment))
-    print(string.format("%-25s %s", "Database adapter", adapter))
-    print(string.format("%-25s %s", "Database schema version", schema_version))
+    ui.box("Environment Details", function()
+        ui.row("Rio version", rio_version)
+        ui.row("Lua version", lua_version)
+        ui.row("LuaRocks version", luarocks_version)
+        ui.row("Middleware", middleware_str)
+        ui.row("Application root", app_root)
+        ui.row("Environment", environment)
+        ui.row("Database adapter", adapter)
+        ui.row("Schema version", schema_version)
+    end)
 
     package.path = original_package_path
     package.cpath = original_package_cpath
 end
 
 local function run_initializers()
-    print("Application Initializers")
-    print(string.rep("-", 40))
+    ui.header("Application Initializers")
     
     local initializers_dir = "config/initializers"
     local handle = io.popen("ls " .. initializers_dir .. "/*.lua 2>/dev/null")
     local count = 0
     
-    if handle then
-        for file in handle:lines() do
-            local name = file:match("([^/]+)$")
-            if name then
-                print(string.format("%02d. %s", count + 1, name))
-                count = count + 1
+    ui.box("Loaded Initializers", function()
+        if handle then
+            for file in handle:lines() do
+                local name = file:match("([^/]+)$")
+                if name then
+                    count = count + 1
+                    ui.row(string.format("%02d", count), name)
+                end
             end
+            handle:close()
         end
-        handle:close()
-    end
-    
-    if count == 0 then
-        print("No initializers found in config/initializers/")
-    else
-        print(string.rep("-", 40))
-        print("Total: " .. count .. " initializer(s)")
+        
+        if count == 0 then
+            ui.info("No initializers found in config/initializers/")
+        end
+    end)
+
+    if count > 0 then
+        ui.line("Total: " .. count .. " initializer(s) found.", colors.dim)
     end
 end
 
@@ -3132,46 +3124,53 @@ local function run_stats()
         return total_lines, total_loc, total_methods, total_files
     end
 
-    print("+----------------------+-------+-------+---------+---------+-----+-------+")
-    print("| Name                 | Lines |   LOC | Modules |   Funcs | F/M | LOC/F |")
-    print("+----------------------+-------+-------+---------+---------+-----+-------+")
+    ui.header("Project Statistics")
 
     local grand_total = { lines = 0, loc = 0, files = 0, methods = 0 }
     local code_loc = 0
     local test_loc = 0
 
-    for _, cat in ipairs(categories) do
-        local l, lc, m, f = scan_dir(cat.name, cat.path, cat.pattern)
-        if f > 0 or not cat.name:find("test") then
-            local f_per_m = f > 0 and math.floor(m / f) or 0
-            local loc_per_f = m > 0 and math.floor(lc / m) or 0
-            
-            print(string.format("| %-20s | %5d | %5d | %7d | %7d | %3d | %5d |", 
-                cat.name, l, lc, f, m, f_per_m, loc_per_f))
-            
-            grand_total.lines = grand_total.lines + l
-            grand_total.loc = grand_total.loc + lc
-            grand_total.files = grand_total.files + f
-            grand_total.methods = grand_total.methods + m
-            
-            if cat.name:lower():find("test") then
-                test_loc = test_loc + lc
-            else
-                code_loc = code_loc + lc
+    ui.box("Category Summary", function()
+        -- Table Header
+        local header_row = string.format("  %-20s │ %5s │ %5s │ %7s │ %7s", "Name", "Lines", "LOC", "Modules", "Funcs")
+        ui.text(header_row, colors.yellow)
+        ui.text(string.rep("─", #header_row), colors.dim)
+
+        for _, cat in ipairs(categories) do
+            local l, lc, m, f = scan_dir(cat.name, cat.path, cat.pattern)
+            if f > 0 or not cat.name:find("test") then
+                local line = string.format("  %-20s │ %5d │ %5d │ %7d │ %7d", 
+                    cat.name, l, lc, f, m)
+                ui.text(line)
+                
+                grand_total.lines = grand_total.lines + l
+                grand_total.loc = grand_total.loc + lc
+                grand_total.files = grand_total.files + f
+                grand_total.methods = grand_total.methods + m
+                
+                if cat.name:lower():find("test") then
+                    test_loc = test_loc + lc
+                else
+                    code_loc = code_loc + lc
+                end
             end
         end
-    end
 
-    print("+----------------------+-------+-------+---------+---------+-----+-------+")
-    local total_f_per_m = grand_total.files > 0 and math.floor(grand_total.methods / grand_total.files) or 0
-    local total_loc_per_f = grand_total.methods > 0 and math.floor(grand_total.loc / grand_total.methods) or 0
-    print(string.format("| %-20s | %5d | %5d | %7d | %7d | %3d | %5d |", 
-        "Total", grand_total.lines, grand_total.loc, grand_total.files, grand_total.methods, total_f_per_m, total_loc_per_f))
-    print("+----------------------+-------+-------+---------+---------+-----+-------+")
-    
-    local ratio = code_loc > 0 and string.format("1:%.1f", test_loc / code_loc) or "N/A"
-    print(string.format("  Code LOC: %d     Test LOC: %d     Code to Test Ratio: %s", code_loc, test_loc, ratio))
-    print("")
+        ui.text(string.rep("─", #header_row), colors.dim)
+        local total_row = string.format("  %-20s │ %5d │ %5d │ %7d │ %7d", 
+            "TOTAL", grand_total.lines, grand_total.loc, grand_total.files, grand_total.methods)
+        ui.text(total_row, colors.bold .. colors.white)
+    end)
+
+    ui.box("Ratios & Metrics", function()
+        local ratio = code_loc > 0 and string.format("1:%.1f", test_loc / code_loc) or "N/A"
+        ui.row("Code LOC", code_loc)
+        ui.row("Test LOC", test_loc)
+        ui.row("Code to Test Ratio", ratio)
+        
+        local complexity = grand_total.methods > 0 and math.floor(grand_total.loc / grand_total.methods) or 0
+        ui.row("Avg LOC per function", complexity)
+    end)
 end
 
 
@@ -3268,164 +3267,227 @@ local function destroy_migration(migration_name)
 end
 
 local function show_general_help()
-    print("Usage: rio <command> [subcommand] [arguments]")
-    print("")
-    print("Commands:")
-    print("  new <project_name>             - Creates a new Rio project.")
-    print("  server [options]               - Starts the Rio web server.")
-    print("  console [options]              - Opens an interactive Rio console.")
-    print("  runner [options] <code|file>   - Runs Lua code in the context of the Rio application.")
-    print("  test [args]                    - Runs Busted tests for the application.")
-    print("  routes [options]               - Lists defined routes (supports filtering and expanded view).")
-    print("  middleware                     - Lists the application's middleware stack.")
-    print("  middleware:create <name>       - Generates a new middleware file.")
-    print("  middleware:use <name>          - Enables a middleware in config/middlewares.lua.")
-    print("  middleware:unuse <name>        - Disables a middleware in config/middlewares.lua.")
-    print("  middleware:rm <name>           - Deletes a local middleware file.")
-    print("  about                          - Displays information about the application's environment.")
-    print("  stats                          - Displays project statistics (LOC, methods).")
-    print("  initializers                   - Lists all application initializers in invocation order.")
-    print("  db:<subcommand> [...]          - Database management commands.")
-    print("  tmp:<subcommand>               - Temporary files and directories management.")
-    print("  mailbox:<subcommand> [...]     - Inbound email management commands.")
-    print("  generate <type> <name> [...]   - Generates new resources (controller, model, migration).")
-    print("  destroy <type> <name> [...]    - Destroys generated resources (controller, model, migration).")
-    print("  help [command]                  - Displays help for a command or general help.")
-    print("")
-    print("Run 'rio help <command>' or 'rio help <command> [subcommand]' for more information.")
+    ui.header("Rio Framework CLI")
+    ui.line("Usage: rio <command> [subcommand] [arguments]", colors.yellow)
+    
+    ui.box("Core Commands", function()
+        ui.row("new <project_name>", "Create a new Rio project")
+        ui.row("server [options]", "Start the Rio web server")
+        ui.row("console [options]", "Open an interactive Rio console")
+        ui.row("test [args]", "Run Busted tests")
+        ui.row("runner <code|file>", "Run Lua code in app context")
+        ui.row("routes [options]", "List defined application routes")
+        ui.row("middleware", "Manage the middleware stack")
+        ui.row("db:<subcommand>", "Database management (migrate, seed...)")
+        ui.row("generate <type>", "Generate resources (scaffold, model...)")
+        ui.row("destroy <type>", "Undo a generation")
+        ui.row("stats", "Project statistics (LOC, methods)")
+        ui.row("initializers", "List application initializers")
+        ui.row("about", "Application environment info")
+        ui.row("help [command]", "Show help for a command")
+    end)
+
+    ui.line("Run 'rio help <command>' for more information on specific commands.", colors.dim)
 end
 
 local function show_middleware_help()
-    print("Usage: rio middleware[:subcommand] [args]")
-    print("")
-    print("Available subcommands:")
-    print("  middleware                           - Lists the application's middleware stack.")
-    print("  middleware:create <name>             - Generates a new middleware file in app/middleware/.")
-    print("  middleware:use <name>                - Enables a middleware in config/middlewares.lua.")
-    print("  middleware:unuse <name>              - Disables a middleware in config/middlewares.lua.")
-    print("  middleware:rm <name>                 - Deletes a local middleware file.")
-    print("")
-    print("Core middleware names: logger, security, cors, auth, static")
-    print("Example: rio middleware:create auth_check")
-    print("Example: rio middleware:use logger")
-    print("Example: rio middleware:unuse logger")
-    print("Example: rio middleware:rm auth_check")
+    ui.header("Middleware Management")
+    ui.line("Usage: rio middleware[:subcommand] [args]", colors.yellow)
+    
+    ui.box("Subcommands", function()
+        ui.row("middleware", "List the application middleware stack")
+        ui.row("middleware:create <name>", "Generate a new middleware file")
+        ui.row("middleware:use <name>", "Enable a middleware in config")
+        ui.row("middleware:unuse <name>", "Disable a middleware in config")
+        ui.row("middleware:rm <name>", "Delete a local middleware file")
+    end)
+
+    ui.info("Core names: logger, security, cors, auth, static")
+    ui.line("Example: rio middleware:use logger", colors.dim)
 end
 
 local function show_generate_help()
-    print("Usage: rio generate <type> <name> [options]")
-    print("")
-    print("Available generators:")
-    print("  generate controller <name> [action1 action2...] - Generates a new controller.")
-    print("  generate channel <name> - Generates a WebSocket channel.")
-    print("  generate model <name> [field1:type field2:type...] - Generates a new model and migration.")
-    print("  generate migration <name> [field1:type field2:type...] - Generates a new migration.")
-    print("  generate resource <name> [field1:type field2:type...] - Generates a new model, migration, controller, and routes.")
-    print("  generate scaffold <name> [field1:type field2:type...] - Generates a full CRUD (model, migration, controller, views, and routes).")
-    print("")
-    print("Example: rio generate controller Users index show")
-    print("Example: rio generate model Product name:string price:integer")
+    ui.header("Resource Generation")
+    ui.line("Usage: rio generate <type> <name> [options]", colors.yellow)
+    
+    ui.box("Available Generators", function()
+        ui.row("controller <name>", "Generate a new controller")
+        ui.row("model <name>", "Generate a model and migration")
+        ui.row("migration <name>", "Generate a new migration")
+        ui.row("scaffold <name>", "Full CRUD generation")
+        ui.row("resource <name>", "Model, migration, controller & routes")
+        ui.row("channel <name>", "Generate a WebSocket channel")
+    end)
+
+    ui.line("Example: rio generate model Product name:string", colors.dim)
 end
 
 local function show_destroy_help()
-    print("Usage: rio destroy <type> <name>")
-    print("")
-    print("Available destroyers:")
-    print("  destroy controller <name>                 - Destroys a controller.")
-    print("  destroy model <name>                      - Destroys a model and its associated migration.")
-    print("  destroy migration <name>                  - Destroys a migration file.")
-    print("")
-    print("Example: rio destroy controller Users")
-    print("Example: rio destroy model Product")
+    ui.header("Resource Destruction")
+    ui.line("Usage: rio destroy <type> <name>", colors.yellow)
+    
+    ui.box("Available Destroyers", function()
+        ui.row("controller <name>", "Destroy a controller")
+        ui.row("model <name>", "Destroy a model and its migration")
+        ui.row("migration <name>", "Destroy a migration file")
+    end)
+
+    ui.line("Example: rio destroy model Product", colors.dim)
 end
 
 local function show_test_help()
-    print("Usage: rio test [busted_options]")
-    print("  Runs Busted tests for the Rio application.")
-    print("  By default, it searches for `_test.lua` files in the `test/` directory.")
-    print("  Any additional arguments are passed directly to the `busted` executable.")
-    print("")
-    print("Example: rio test test/controllers/user_test.lua")
-    print("Example: rio test --verbose")
+    ui.header("Test Runner")
+    ui.line("Usage: rio test [busted_options]", colors.yellow)
+    
+    ui.info("Runs Busted tests found in the test/ directory.")
+    ui.info("Additional arguments are passed directly to busted.")
+
+    ui.line("Example: rio test --verbose", colors.dim)
 end
 
 local function show_db_help()
-    print("Usage: rio db:<subcommand> [options]")
-    print("")
-    print("Available database subcommands:")
-    print("  db:create                            - Creates the database for the current environment.")
-    print("  db:drop                              - Drops (deletes) the database for the current environment.")
-    print("  db:migrate                           - Runs pending migrations.")
-    print("  db:rollback                          - Reverts the last migration.")
-    print("  db:status                            - Shows the status of all migrations.")
-    print("  db:version                           - Retrieve the current schema version number.")
-    print("  db:prepare                           - Run setup if database does not exist, or run migrations.")
-    print("  db:setup                             - Create the database, load the schema, and initialize with the seed data.")
-    print("  db:reset                             - Drop and recreate the database from its schema for the current environment and load the seed data.")
-    print("  db:system:change --to=ADAPTER        - Switch the database adapter (postgresql, mysql, sqlite3).")
-    print("  db:seed                              - Runs the seed file (db/seeds.lua).")
-    print("  db:seed:replant                      - Truncate tables of each database for current environment and load the seed data.")
-    print("")
-    print("Example: rio db:create")
-    print("Example: rio db:migrate")
-    print("Example: rio db:rollback")
-    print("Example: rio db:status")
-    print("Example: rio db:seed")
-    print("Example: rio db:system:change --to=postgresql")
+    ui.header("Database Management")
+    ui.line("Usage: rio db:<subcommand> [options]", colors.yellow)
+    
+    ui.box("Available Subcommands", function()
+        ui.row("db:create", "Create DB for current environment")
+        ui.row("db:drop", "Delete DB for current environment")
+        ui.row("db:migrate", "Run pending migrations")
+        ui.row("db:rollback", "Revert the last migration")
+        ui.row("db:status", "Show status of all migrations")
+        ui.row("db:version", "Retrieve current schema version")
+        ui.row("db:prepare", "Run setup or migrate as needed")
+        ui.row("db:setup", "Create DB, load schema and seed")
+        ui.row("db:reset", "Drop, recreate and seed database")
+        ui.row("db:system:change", "Switch adapter (e.g. --to=mysql)")
+        ui.row("db:seed", "Run seed file (db/seeds.lua)")
+        ui.row("db:seed:replant", "Truncate all tables and re-seed")
+    end)
+
+    ui.line("Example: rio db:migrate", colors.dim)
+end
+
+local function show_new_help()
+    ui.header("Project Creation")
+    ui.line("Usage: rio new <project_name> [options]", colors.yellow)
+    
+    ui.info("Creates a new Rio project with a default directory structure.")
+    
+    ui.box("Options", function()
+        ui.row("--database=ADAPTER", "postgresql, mysql, sqlite3, none")
+        ui.row("--api", "Configure for API-only use")
+    end)
+
+    ui.line("Example: rio new my_app --database=sqlite3", colors.dim)
+end
+
+local function show_routes_help()
+    ui.header("Application Routes")
+    ui.line("Usage: rio routes [options]", colors.yellow)
+    
+    ui.info("Lists all defined routes in the application.")
+    
+    ui.box("Options", function()
+        ui.row("-c, --controller=NAME", "Filter by controller name")
+        ui.row("-g, --grep=PATTERN", "Filter by matching pattern")
+        ui.row("-E, --expanded", "Show detailed format")
+    end)
+end
+
+local function show_console_help()
+    ui.header("Interactive Console")
+    ui.line("Usage: rio console [options]", colors.yellow)
+    
+    ui.info("Opens an interactive Lua console with the Rio environment.")
+    
+    ui.box("Options", function()
+        ui.row("-e, --environment=ENV", "App environment (default: dev)")
+        ui.row("-s, --sandbox", "Rollback DB changes on exit")
+    end)
+
+    ui.box("Available Objects", function()
+        ui.row("app", "Application instance for testing")
+        ui.row("helper", "View utilities and helpers")
+        ui.row("<ModelName>", "All your application models")
+    end)
+end
+
+local function show_stats_help()
+    ui.header("Project Statistics")
+    ui.line("Usage: rio stats", colors.yellow)
+    ui.info("Displays project statistics including Lines of Code (LOC) and methods.")
+end
+
+local function show_about_help()
+    ui.header("Environment Info")
+    ui.line("Usage: rio about", colors.yellow)
+    ui.info("Displays detailed information about the environment and versions.")
+end
+
+local function show_initializers_help()
+    ui.header("Application Initializers")
+    ui.line("Usage: rio initializers", colors.yellow)
+    ui.info("Lists all application initializers in invocation order.")
 end
 
 local function show_mailbox_help()
-    print("Usage: rio mailbox:<subcommand> [args]")
-    print("")
-    print("Available mailbox subcommands:")
-    print("  mailbox:install                      - Installs the Mailbox system (folders and migrations).")
-    print("  mailbox:ingress:exim                 - Relay an inbound email from Exim to Rio.")
-    print("  mailbox:ingress:postfix              - Relay an inbound email from Postfix to Rio.")
-    print("  mailbox:ingress:qmail                - Relay an inbound email from Qmail to Rio.")
-    print("")
-    print("Example: rio mailbox:install")
-    print("Example: cat email.eml | rio mailbox:ingress:postfix")
+    ui.header("Mailbox Management")
+    ui.line("Usage: rio mailbox:<subcommand> [args]", colors.yellow)
+    
+    ui.box("Subcommands", function()
+        ui.row("mailbox:install", "Install the Mailbox system")
+        ui.row("mailbox:ingress:exim", "Relay inbound email from Exim")
+        ui.row("mailbox:ingress:postfix", "Relay inbound email from Postfix")
+        ui.row("mailbox:ingress:qmail", "Relay inbound email from Qmail")
+    end)
+
+    ui.line("Example: rio mailbox:install", colors.dim)
 end
 
 local function show_tmp_help()
-    print("Usage: rio tmp:<subcommand>")
-    print("")
-    print("Available tmp subcommands:")
-    print("  tmp:create                           - Creates tmp directories for cache, sockets, and pids.")
-    print("  tmp:clear                            - Clears all cache, sockets, and screenshot files.")
-    print("  tmp:cache:clear                      - Clears tmp/cache.")
-    print("  tmp:sockets:clear                    - Clears tmp/sockets.")
-    print("  tmp:screenshots:clear                - Clears tmp/screenshots.")
-    print("")
-    print("Example: rio tmp:clear")
+    ui.header("Temporary Files Management")
+    ui.line("Usage: rio tmp:<subcommand>", colors.yellow)
+    
+    ui.box("Available Subcommands", function()
+        ui.row("tmp:create", "Create required tmp directories")
+        ui.row("tmp:clear", "Clear all cache and temp files")
+        ui.row("tmp:cache:clear", "Clear application cache")
+        ui.row("tmp:sockets:clear", "Clear domain sockets")
+        ui.row("tmp:screenshots:clear", "Clear test screenshots")
+    end)
+
+    ui.line("Example: rio tmp:clear", colors.dim)
 end
 
 local function show_server_help()
-    print("Usage: rio server [options]")
-    print("")
-    print("Options:")
-    print("  -p, --port=PORT                - Binds to the specified port (default: 8080).")
-    print("  -b, --binding=IP               - Binds to the specified IP address (default: 0.0.0.0).")
-    print("  -e, --environment=ENVIRONMENT  - Sets the server environment (default: development).")
-    print("  -d, --daemon                   - Runs the server in the background (daemon mode).")
-    print("      --pid=PID_FILE             - Specifies the PID file for daemon mode (default: tmp/pids/server.pid).")
-    print("")
-    print("Example: rio server -p 3001 -b 127.0.0.1 -e production -d")
+    ui.header("Rio Web Server")
+    ui.line("Usage: rio server [options]", colors.yellow)
+    
+    ui.box("Options", function()
+        ui.row("-p, --port=PORT", "Port to listen on (default: 8080)")
+        ui.row("-b, --binding=IP", "IP to bind to (default: 0.0.0.0)")
+        ui.row("-e, --environment=ENV", "App environment (default: dev)")
+        ui.row("-d, --daemon", "Run server in background")
+        ui.row("--pid=FILE", "PID file path for daemon mode")
+    end)
+
+    ui.line("Example: rio server -p 3001 -e production -d", colors.dim)
 end
 
 
 local function show_runner_help()
-    print("Usage: rio runner [options] <code|file>")
-    print("")
-    print("  Runs Lua code in the context of the Rio application.")
-    print("  You can provide a string of Lua code or a path to a Lua file.")
-    print("")
-    print("Options:")
-    print("  -e, --environment=ENVIRONMENT  - Sets the environment (default: development).")
-    print("      --skip-executor            - Skip loading models and connecting to the database.")
-    print("")
-    print("Example: rio runner \"print(User:count())\"")
-    print("Example: rio runner scripts/one_off_task.lua")
+    ui.header("Rio Runner")
+    ui.line("Usage: rio runner [options] <code|file>", colors.yellow)
+    
+    ui.info("Runs Lua code in the context of the Rio application.")
+    
+    ui.box("Options", function()
+        ui.row("-e, --environment=ENV", "App environment (default: dev)")
+        ui.row("--skip-executor", "Skip loading models and DB")
+    end)
+
+    ui.line("Example: rio runner \"print(User:count())\"", colors.dim)
+    ui.line("Example: rio runner scripts/task.lua", colors.dim)
 end
 
 
@@ -3491,14 +3553,11 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
         end
 
         if has_help_flag then
-            print("Usage: rio new <project_name> [--database=adapter] [--api]")
-            print("  Creates a new Rio project with a default directory structure.")
-            print("  Options:")
-            print("    --database=adapter     - Specifies the database adapter (postgresql, mysql, sqlite3, none). Default is none.")
-            print("    --api                  - Configure the application for API-only use.")
+            show_new_help()
+            return
         elseif not project_name then
-            print("Error: 'new' command requires a project name.")
-            show_general_help()
+            ui.status("Project creation", false, "Project name is required.")
+            show_new_help()
             return
         else
             -- Validate database_adapter
@@ -3549,12 +3608,8 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
         end
     elseif command == "console" then
         if has_help_flag then
-            print("Usage: rio console [options]")
-            print("  Opens an interactive Lua console with the Rio application environment loaded.")
-            print("  Automatically loads all models into the global scope.")
-            print("  Options:")
-            print("    -e, --environment=ENV  - Specifies the environment (default: development).")
-            print("    -s, --sandbox          - Rollback database changes on exit.")
+            show_console_help()
+            return
         else
             local console_options = {}
             local i = 1
@@ -3607,12 +3662,8 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
         end
     elseif command == "routes" then
         if has_help_flag then
-            print("Usage: rio routes [options]")
-            print("  Lists all defined routes in the application.")
-            print("  Options:")
-            print("    -c, --controller=NAME   - Filter routes by controller name.")
-            print("    -g, --grep=PATTERN      - Filter routes by matching pattern.")
-            print("    -E, --expanded          - Display detailed information in expanded format.")
+            show_routes_help()
+            return
         else
             local routes_options = {}
             local i = 1
@@ -3682,22 +3733,19 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
         end
     elseif command == "about" then
         if has_help_flag then
-            print("Usage: rio about")
-            print("  Displays information about the application's environment, including versions and database status.")
+            show_about_help()
         else
             run_about()
         end
     elseif command == "stats" then
         if has_help_flag then
-            print("Usage: rio stats")
-            print("  Displays project statistics including Lines of Code (LOC) and methods.")
+            show_stats_help()
         else
             run_stats()
         end
     elseif command == "initializers" then
         if has_help_flag then
-            print("Usage: rio initializers")
-            print("  Lists all application initializers in the order they are invoked during boot.")
+            show_initializers_help()
         else
             run_initializers()
         end
@@ -3761,6 +3809,23 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
             print("Error: Unknown 'db' subcommand '" .. subcommand .. "'")
             show_db_help()
         end
+    elseif command == "ui" then
+        if subcommand == "test" then
+            ui.header("Rio UI Showcase")
+            ui.box("Core Diagnostics", function()
+                ui.status("Server Module", true, "Loaded")
+                ui.status("Database Driver", true, "Connected (MariaDB)")
+                ui.status("Event Loop", true, "cqueues detected")
+                ui.info("Testing a very long informational message that might need truncation in smaller terminal windows to prevent breaking the box borders.")
+            end)
+            
+            ui.header("Individual Components")
+            ui.status("Stand-alone Status", true, "Success outside box")
+            ui.info("Stand-alone Info message")
+            ui.status("Failed Operation", false, "Example error message")
+        else
+            print("Error: Unknown 'ui' subcommand '" .. (subcommand or "nil") .. "'")
+        end
     elseif command == "tmp" then
         if has_help_flag then
             show_tmp_help()
@@ -3784,7 +3849,7 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
         elseif subcommand == "ingress:qmail" then
             run_mailbox_ingress("Qmail")
         else
-            print("Usage: rio mailbox:install | mailbox:ingress:<provider>")
+            ui.line("Usage: rio mailbox:install | mailbox:ingress:<provider>", colors.yellow)
         end
     elseif command == "scaffold" then
         if has_help_flag then
@@ -3873,7 +3938,7 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
         elseif generator_type == "scaffold" then
             generate_scaffold(generator_name, generator_params, api_only)
         else
-            print("Error: Unknown generator type '" .. generator_type .. "'")
+            ui.status("Resource generation", false, "Unknown generator type '" .. (generator_type or "nil") .. "'.")
             show_generate_help()
         end
     elseif command == "destroy" then
@@ -3902,7 +3967,7 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
         elseif destroyer_type == "migration" then
             destroy_migration(destroyer_name)
         else
-            print("Error: Unknown destroyer type '" .. destroyer_type .. "'")
+            ui.status("Resource destruction", false, "Unknown destroyer type '" .. (destroyer_type or "nil") .. "'.")
             show_destroy_help()
         end
     elseif command == "help" or command == nil then
@@ -3930,43 +3995,25 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
             elseif help_command == "destroy" then
                 show_destroy_help()
             elseif help_command == "new" then
-                print("Usage: rio new <project_name>")
-                print("  Creates a new Rio project with a default directory structure.")
+                show_new_help()
             elseif help_command == "server" then
                 show_server_help()
             elseif help_command == "runner" then
                 show_runner_help()
             elseif help_command == "console" then
-                print("Usage: rio console [options]")
-                print("  Opens an interactive Lua console with the Rio application environment loaded.")
-                print("  Automatically loads all models into the global scope.")
-                print("  Options:")
-                print("    -e, --environment=ENV  - Specifies the environment (default: development).")
-                print("    -s, --sandbox          - Rollback all database changes on exit.")
-                print("  Objects available:")
-                print("    app                    - The application instance for route testing.")
-                print("    helper                 - View utilities and helpers.")
-                print("    <ModelName>            - All your application models.")
+                show_console_help()
             elseif help_command == "test" then
                 show_test_help()
             elseif help_command == "routes" then
-                print("Usage: rio routes [options]")
-                print("  Lists all defined routes in the application, including HTTP methods, URI patterns, and handler source location.")
-                print("  Options:")
-                print("    -c, --controller=NAME   - Filter routes by controller name.")
-                print("    -g, --grep=PATTERN      - Filter routes by matching pattern.")
-                print("    -E, --expanded          - Display detailed information in expanded format.")
+                show_routes_help()
             elseif help_command == "middleware" then
                 show_middleware_help()
             elseif help_command == "about" then
-                print("Usage: rio about")
-                print("  Displays detailed information about the application's environment, versions, and database status.")
+                show_about_help()
             elseif help_command == "stats" then
-                print("Usage: rio stats")
-                print("  Displays project statistics including Lines of Code (LOC) and methods/functions per category.")
+                show_stats_help()
             elseif help_command == "initializers" then
-                print("Usage: rio initializers")
-                print("  Lists all application initializers defined in config/initializers/ in their invocation order.")
+                show_initializers_help()
             elseif help_command == "db" then
                 show_db_help()
             elseif help_command == "tmp" then
