@@ -189,13 +189,33 @@ end
 function Server:listen(port, host)
     local h = host or os.getenv("RIO_BINDING") or (self.config.server and self.config.server.host) or "0.0.0.0"
     local p = tonumber(port or os.getenv("RIO_PORT") or (self.config.server and self.config.server.port)) or 8080
+    
+    local standalone_adapter = require("rio.core.adapters.standalone")
+    
+    local function handle_stream(_, stream)
+        local adapter = standalone_adapter.new(stream)
+        return self:_process_request(adapter)
+    end
+
     local ok, inst = pcall(compat.http_server.listen, {
-        host = h, port = p, reuseaddr = true,
-        onstream = function(_, stream) self:_process_request(require("rio.core.adapters.standalone").new(stream)) end
+        host = h,
+        port = p,
+        reuseaddr = true,
+        cq = self.config.cq,
+        onstream = handle_stream
     })
-    if not ok then return false end
+
+    if not ok then return nil, inst end
+    
     print(string.format("%sRio Framework%s listening on %shttp://%s:%d%s", c.bold .. c.green, c.reset, c.cyan, h, p, c.reset))
-    if type(inst) == "table" and inst.loop then while true do pcall(inst.loop, inst); os.execute("sleep 0.1") end end
+    self.server_inst = inst
+    return inst
+end
+
+function Server:close()
+    if self.server_inst and self.server_inst.close then
+        pcall(self.server_inst.close, self.server_inst)
+    end
     return true
 end
 
@@ -215,7 +235,14 @@ end
 function Server:run(port, host)
     local cwd = os.getenv("PWD") or "."; package.path = cwd .. "/?.lua;" .. cwd .. "/?/init.lua;" .. package.path
     self:bootstrap()
-    return self:listen(port, host)
+    local inst = self:listen(port, host)
+    if inst and inst.loop then
+        local ok, err = pcall(inst.loop, inst)
+        if not ok then
+            io.stderr:write(c.red .. "Server Loop Error: " .. tostring(err) .. c.reset .. "\n")
+        end
+    end
+    return inst
 end
 
 return Server
