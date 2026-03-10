@@ -16,10 +16,14 @@ end
 function SQLiteAdapter:get_driver_name() return "sqlite3" end
 function SQLiteAdapter:get_luasql_module() return "luasql.sqlite3" end
 
--- Do NOT use a shared environment, instead create it fresh per connection
--- to completely isolate connections and avoid 'environment is closed' C-level crashes
 function SQLiteAdapter:initialize()
-    BaseAdapter.initialize(self)
+    if BaseAdapter.initialize(self) then
+        -- SQLite environment can be shared if handled carefully
+        if self.driver and self.driver.sqlite3 and not self.env then
+            local ok, env = pcall(self.driver.sqlite3)
+            if ok then self.env = env end
+        end
+    end
 end
 
 function SQLiteAdapter:connect(config)
@@ -32,13 +36,29 @@ function SQLiteAdapter:connect(config)
     local db_file = cfg.database
     if not db_file then return nil, "Database file not specified" end
 
-    -- Create a brand new environment for this connection to avoid state/lock carryover
-    local env = self.driver.sqlite3()
+    -- For :memory: databases, we MUST use pooling and keep at least one connection
+    local is_memory = (db_file == ":memory:")
+    if is_memory and self.MAX_POOL_SIZE < 1 then
+        self.MAX_POOL_SIZE = 1
+    end
+
+    -- Use shared environment if available, otherwise create a local one
+    local env = self.env or (self.driver.sqlite3 and self.driver.sqlite3())
     if not env then return nil, "Failed to initialize LuaSQL SQLite environment" end
 
-    local conn, err = env:connect(db_file)
-    if not conn then
-        if env and env.close then pcall(env.close, env) end
+    -- Safely attempt to connect
+    local ok, conn, err = pcall(function() return env:connect(db_file) end)
+    
+    -- If environment was closed (bad self), try to re-initialize it
+    if not ok or (not conn and tostring(err):find("closed")) then
+        if self.env then self.env = nil end
+        env = self.driver.sqlite3()
+        if self.config == cfg then self.env = env end
+        ok, conn, err = pcall(function() return env:connect(db_file) end)
+    end
+
+    if not ok or not conn then
+        if env and env ~= self.env and env.close then pcall(env.close, env) end
         return nil, "Connection failed: " .. (err or "unknown error")
     end
     
@@ -53,12 +73,15 @@ end
 function SQLiteAdapter:release_connection(conn, env)
     if not conn then return end
     
-    if self.pool_size < self.MAX_POOL_SIZE then
+    -- Always pool :memory: connections to keep data alive in SQLite
+    local is_memory = (self.config and self.config.database == ":memory:")
+    
+    if is_memory or self.pool_size < self.MAX_POOL_SIZE then
         table.insert(self.connection_pool, {conn, env})
         self.pool_size = self.pool_size + 1
     else
         pcall(conn.close, conn)
-        if env and env.close then
+        if env and env ~= self.env and env.close then
             pcall(env.close, env)
         end
     end
@@ -269,17 +292,30 @@ end
 -- Management
 function SQLiteAdapter.disconnect()
     if instance then
+        local is_memory = (instance.config and instance.config.database == ":memory:")
+        
         if instance.connection_pool then
+            local new_pool = {}
             for _, conn_pair in ipairs(instance.connection_pool) do
                 local conn = conn_pair[1]
                 local env = conn_pair[2]
-                if conn and conn.close then pcall(conn.close, conn) end
-                if env and env.close then pcall(env.close, env) end
+                
+                -- If it's memory, we keep one connection alive if possible
+                if is_memory and #new_pool == 0 then
+                    table.insert(new_pool, conn_pair)
+                else
+                    if conn and conn.close then pcall(conn.close, conn) end
+                    if env and env ~= instance.env and env.close then pcall(env.close, env) end
+                end
             end
-            instance.connection_pool = {}
-            instance.pool_size = 0
+            instance.connection_pool = new_pool
+            instance.pool_size = #new_pool
         end
-        instance = nil
+        
+        -- Reset singleton unless it's memory and we need to keep the state
+        if not is_memory then
+            instance = nil
+        end
     end
     collectgarbage("collect")
 end
@@ -288,40 +324,45 @@ function SQLiteAdapter:create_database(db_config)
     local db_file = db_config.database
     if not db_file then return false, "No database file specified" end
 
-    -- Ensure any existing connections are closed and locks released
-    SQLiteAdapter.disconnect()
-
-    -- Rely on LuaSQL to create the file if it doesn't exist upon connection
-    local adapter = SQLiteAdapter:new(db_config)
-    local conn, env = adapter:connect(db_config)
-    if conn then
-        conn:close()
-        if env and env.close then env:close() end
-        if DB.verbose then print("✓ Database file ensured: " .. db_file) end
-        return true
-    else
-        return false, "Could not initialize database file: " .. tostring(env)
+    if db_file ~= ":memory:" then
+        SQLiteAdapter.disconnect()
+        local f, err = io.open(db_file, "a")
+        if f then
+            f:close()
+            os.execute("chmod 664 " .. db_file .. " 2>/dev/null")
+            return true
+        else
+            return false, (err or "Could not create database file")
+        end
     end
+    return true
 end
 
 function SQLiteAdapter:drop_database(db_config)
     local db_file = db_config.database
     if not db_file then return false, "No database file specified" end
 
-    -- Double check disconnect was called
-    SQLiteAdapter.disconnect()
-
-    local ok, err = os.remove(db_file)
-    if ok then
-        if DB.verbose then print("✓ Deleted: " .. db_file) end
-        return true
-    else
-        -- If file doesn't exist, we consider it "dropped" successfully
-        if tostring(err):lower():find("no such file") then
+    if db_file ~= ":memory:" then
+        SQLiteAdapter.disconnect()
+        local ok, err = os.remove(db_file)
+        if ok then
             return true
+        else
+            if tostring(err):lower():find("no such file") then return true end
+            return false, err
         end
-        return false, err
+    else
+        -- For :memory:, dropping means clearing the pool to destroy the DB
+        if instance and instance.connection_pool then
+            for _, conn_pair in ipairs(instance.connection_pool) do
+                local conn = conn_pair[1]
+                if conn and conn.close then pcall(conn.close, conn) end
+            end
+            instance.connection_pool = {}
+            instance.pool_size = 0
+        end
     end
+    return true
 end
 
 -- Adapter Instance Singleton
@@ -333,11 +374,16 @@ local function get_instance(cfg)
             driver = nil,
             connection_pool = {},
             pool_size = 0,
-            MAX_POOL_SIZE = (cfg and cfg.pool) or 0 -- No pooling by default for SQLite
+            MAX_POOL_SIZE = (cfg and cfg.pool) or 0
         }, SQLiteAdapter)
         instance:initialize()
+    else
+        -- Update config if provided, but preserve internal state
+        if cfg then 
+            for k, v in pairs(cfg) do instance.config[k] = v end
+            if cfg.pool then instance.MAX_POOL_SIZE = cfg.pool end
+        end
     end
-    if cfg then instance.config = cfg end
     return instance
 end
 
