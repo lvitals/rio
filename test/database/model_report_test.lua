@@ -52,35 +52,35 @@ describe("ActiveRecord Comprehensive Report", function()
     it("should generate the full professional comprehensive report", function()
         RioUI.box("Rio ActiveRecord Diagnostic", function()
             -- 1. CRUD & HOOKS
-            RioUI.info("--- CRUD & HOOKS ---")
+            RioUI.text("--- CRUD & HOOKS ---", RioColor.yellow)
             local user = User:new({ username = "leandro", name = "Leandro", email = "leandro@example.com", age = 30, password = "secret_password" })
             local saved = user:save()
             RioUI.status("Save new model", saved)
             RioUI.status("Auto-generated ID", user.id ~= nil, "ID: " .. (user.id or "N/A"))
 
             -- 2. VALIDATIONS
-            RioUI.info("--- VALIDATIONS ---")
+            RioUI.text("--- VALIDATIONS ---", RioColor.yellow)
             local invalid_user = User:new({ username = "leandro", email = "invalid", age = "abc", password = "123" })
             local ok = invalid_user:save()
             RioUI.status("Reject invalid data", ok == false)
             RioUI.status("Capture error messages", invalid_user.errors:any(), "Errors: " .. invalid_user.errors:size())
 
             -- 3. QUERY METHODS
-            RioUI.info("--- QUERY METHODS ---")
+            RioUI.text("--- QUERY METHODS ---", RioColor.yellow)
             local found = User:find(user.id)
             RioUI.status("Find by ID", found ~= nil and found.username == "leandro")
             RioUI.status("Exists check", User:exists({ username = "leandro" }))
             RioUI.status("Count check", User:count() == 1, "Total: " .. User:count())
 
             -- 4. RELATIONSHIPS
-            RioUI.info("--- RELATIONSHIPS ---")
+            RioUI.text("--- RELATIONSHIPS ---", RioColor.yellow)
             local post = user.posts:create({ title = "Report Post" })
             RioUI.status("HasMany: Create child", post ~= nil and post.id ~= nil)
             RioUI.status("HasMany: Lazy count", user.posts:count() == 1)
             RioUI.status("BelongsTo: Load parent", post.user ~= nil and post.user.username == "leandro")
 
             -- 5. SERIALIZATION
-            RioUI.info("--- SERIALIZATION ---")
+            RioUI.text("--- SERIALIZATION ---", RioColor.yellow)
             User.attributes = { "id", "username", "name", "age", "email" }
             local data = user:toTable()
             for k, v in pairs(data) do
@@ -88,7 +88,7 @@ describe("ActiveRecord Comprehensive Report", function()
             end
 
             -- 6. SOFT DELETE & CALCULATIONS
-            RioUI.info("--- SOFT DELETE & CALCULATIONS ---")
+            RioUI.text("--- SOFT DELETE & CALCULATIONS ---", RioColor.yellow)
             user:delete()
             RioUI.status("Hide soft-deleted", User:find(user.id) == nil)
             local raw_count = DBManager.query("SELECT COUNT(*) as c FROM users")[1].c

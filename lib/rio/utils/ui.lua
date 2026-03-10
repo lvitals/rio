@@ -161,18 +161,18 @@ function M.info(msg)
     if M.drawing_box then
         local width = get_terminal_width()
         local inner_width = width - 2
-        local content = "  " .. colors.yellow .. "ℹ " .. colors.reset .. colors.white .. utf8_truncate(msg, inner_width - 4) .. colors.reset
+        local content = "  " .. colors.yellow .. "ℹ " .. colors.reset .. colors.bold .. colors.white .. utf8_truncate(msg, inner_width - 4) .. colors.reset
         local vis_len = get_visible_len(content)
         local padding = inner_width - vis_len
         if padding < 0 then padding = 0 end
         print(colors.bold .. colors.cyan .. "│" .. colors.reset .. content .. string.rep(" ", padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
     else
-        print("  " .. colors.yellow .. "ℹ " .. colors.reset .. colors.white .. msg .. colors.reset)
+        print("  " .. colors.yellow .. "ℹ " .. colors.reset .. colors.bold .. colors.white .. msg .. colors.reset)
     end
 end
 
 function M.text(msg, color)
-    local c = color or colors.white
+    local c = color or (colors.bold .. colors.white)
     if M.drawing_box then
         local width = get_terminal_width()
         local inner_width = width - 2
