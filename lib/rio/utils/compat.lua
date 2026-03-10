@@ -8,6 +8,7 @@ local M = {}
 M.colors = {
     reset = "\27[0m",
     bold = "\27[1m",
+    dim = "\27[2m",
     red = "\27[31m",
     green = "\27[32m",
     yellow = "\27[33m",

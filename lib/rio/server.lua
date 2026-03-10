@@ -208,6 +208,7 @@ function Server:listen(port, host)
     if not ok then return nil, inst end
     
     print(string.format("%sRio Framework%s listening on %shttp://%s:%d%s", c.bold .. c.green, c.reset, c.cyan, h, p, c.reset))
+    print(string.format("  %sℹ Press %sCtrl+C%s to stop the server%s", c.dim, c.bold .. c.yellow, c.reset .. c.dim, c.reset))
     self.server_inst = inst
     return inst
 end
@@ -238,8 +239,11 @@ function Server:run(port, host)
     local inst = self:listen(port, host)
     if inst and inst.loop then
         local ok, err = pcall(inst.loop, inst)
-        if not ok then
-            io.stderr:write(c.red .. "Server Loop Error: " .. tostring(err) .. c.reset .. "\n")
+        if not ok then 
+            -- Ignore "interrupted" error which happens on Ctrl+C (SIGINT)
+            if not tostring(err):find("interrupted") then
+                io.stderr:write(c.red .. "Server Loop Error: " .. tostring(err) .. c.reset .. "\n")
+            end
         end
     end
     return inst
