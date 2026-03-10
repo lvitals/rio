@@ -57,9 +57,62 @@ function PostgresAdapter:query(sql, bindings)
     if not conn then return nil, env end
     
     local final_sql = escape_params(conn, sql, bindings)
-    local cur, err = conn:execute(final_sql)
+    local cur, err
+
+    -- Cooperative execution via cqueues if supported
+    if conn.getfd and conn.send_query then
+        local ok, cq_err = pcall(require, "cqueues")
+        if ok and type(cq_err) == "table" and cq_err.poll then
+            local cqueues = cq_err
+            local fd = conn:getfd()
+            
+            local send_ok, send_err = conn:send_query(final_sql)
+            if not send_ok then
+                self:release_connection(conn, env)
+                return nil, send_err
+            end
+
+            local last_res = nil
+            while true do
+                local cons_ok, cons_err = conn:consume_input()
+                if not cons_ok then
+                    if last_res and type(last_res) == "table" and last_res.close then last_res:close() end
+                    self:release_connection(conn, env)
+                    return nil, cons_err
+                end
+                
+                if conn:is_busy() then
+                    -- Use a time-limited poll/yield to avoid serialization issues
+                    -- seen with pure FD polling in some Postgres environments.
+                    -- This ensures other coroutines get CPU time to send their queries.
+                    cqueues.poll(fd, "r", 0.01)
+                else
+                    local res, res_err = conn:get_result()
+                    if res_err then
+                        if last_res and type(last_res) == "table" and last_res.close then last_res:close() end
+                        self:release_connection(conn, env)
+                        return nil, res_err
+                    end
+                    
+                    if res == nil then
+                        break -- all results fetched
+                    end
+                    
+                    if last_res and type(last_res) == "table" and last_res.close then last_res:close() end
+                    last_res = res
+                end
+            end
+            cur = last_res
+        else
+            io.stdout:write(" [FALLBACK: NO CQUEUES] ")
+            cur, err = conn:execute(final_sql)
+        end
+    else
+        io.stdout:write(" [FALLBACK: NO ASYNC DRIVER] ")
+        cur, err = conn:execute(final_sql)
+    end
     
-    if not cur then
+    if not cur and err then
         self:release_connection(conn, env)
         return nil, err
     end
