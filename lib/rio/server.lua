@@ -8,6 +8,7 @@ local response_lib = require("rio.core.response")
 local cache_lib = require("rio.cache")
 local compat = require("rio.utils.compat")
 local string_utils = require("rio.utils.string")
+local ui = require("rio.utils.ui")
 local c = compat.colors
 
 local Server = {}
@@ -177,7 +178,9 @@ function Server:_process_request(adapter)
         if ov == "PUT" or ov == "PATCH" or ov == "DELETE" then ctx.method = ov end
     end
     local ok, res = pcall(run)
-    if not ok then io.stderr:write(c.red .. "Internal Error: " .. tostring(res) .. c.reset .. "\n"); ctx:text("Internal Error", 500)
+    if not ok then 
+        ui.status("Internal Server Error", false, tostring(res))
+        ctx:text("Internal Error", 500)
     elseif type(res) == "string" then ctx:text(res) end
 end
 
@@ -207,8 +210,12 @@ function Server:listen(port, host)
 
     if not ok then return nil, inst end
     
-    print(string.format("%sRio Framework%s listening on %shttp://%s:%d%s", c.bold .. c.green, c.reset, c.cyan, h, p, c.reset))
-    print(string.format("  %sℹ Press %sCtrl+C%s to stop the server%s", c.dim, c.bold .. c.yellow, c.reset .. c.dim, c.reset))
+    local env = self.config.environment or os.getenv("RIO_ENV") or "development"
+    ui.header("Rio Framework")
+    ui.row_simple("Environment", env)
+    ui.row_simple("Listening", string.format("http://%s:%d", h, p))
+    ui.info("Press Ctrl+C to stop the server")
+
     self.server_inst = inst
     return inst
 end

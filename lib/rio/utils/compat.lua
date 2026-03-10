@@ -15,7 +15,8 @@ M.colors = {
     blue = "\27[34m",
     magenta = "\27[35m",
     cyan = "\27[36m",
-    white = "\27[37m"
+    white = "\27[37m",
+    gray = "\27[90m"
 }
 
 -- Lua version detection

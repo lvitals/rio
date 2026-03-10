@@ -3,19 +3,9 @@
 
 local M = {}
 
--- ANSI Colors
-local colors = {
-    reset = "\27[0m",
-    green = "\27[32m",
-    red = "\27[31m",
-    cyan = "\27[36m",
-    yellow = "\27[33m",
-    blue = "\27[34m",
-    magenta = "\27[35m",
-    white = "\27[37m",
-    bold = "\27[1m",
-    dim = "\27[2m"
-}
+-- Professional UI Utilities for the Rio Framework CLI
+local compat = require("rio.utils.compat")
+local colors = compat.colors
 
 M.colors = colors
 
@@ -157,7 +147,7 @@ function M.row(label, value)
     end
 end
 
-function M.info(msg)
+function M.info(msg, label)
     if M.drawing_box then
         local width = get_terminal_width()
         local inner_width = width - 2
@@ -167,7 +157,17 @@ function M.info(msg)
         if padding < 0 then padding = 0 end
         print(colors.bold .. colors.cyan .. "│" .. colors.reset .. content .. string.rep(" ", padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
     else
-        print("  " .. colors.yellow .. "ℹ " .. colors.reset .. colors.bold .. colors.white .. msg .. colors.reset)
+        local icon = colors.yellow .. "ℹ" .. colors.reset
+        if label then
+            local pipe_pos = 30
+            local left = "  " .. label
+            local vis_left = get_visible_len(left)
+            local fill = pipe_pos - vis_left
+            if fill < 1 then fill = 1 end
+            print(left .. string.rep(" ", fill) .. colors.gray .. "» " .. colors.reset .. colors.bold .. colors.white .. msg .. colors.reset)
+        else
+            print("  " .. icon .. " " .. colors.gray .. "» " .. colors.reset .. colors.bold .. colors.white .. msg .. colors.reset)
+        end
     end
 end
 
@@ -198,7 +198,7 @@ function M.row_simple(label, value)
     local fill = pipe_pos - vis_left
     if fill < 1 then fill = 1 end
 
-    print(left .. string.rep(" ", fill) .. colors.dim .. "» " .. colors.reset .. colors.cyan .. tostring(value) .. colors.reset)
+    print(left .. string.rep(" ", fill) .. colors.gray .. "» " .. colors.reset .. colors.cyan .. tostring(value) .. colors.reset)
 end
 
 function M.header(title)
