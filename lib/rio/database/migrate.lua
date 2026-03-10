@@ -238,11 +238,7 @@ function Migrate.seed()
 
     local ok, err_req = pcall(require, "db.seeds")
     if ok then print_success("Database seeded successfully.")
-    else 
-        print("RAW SEED ERROR:")
-        print(tostring(err_req))
-        print_error("Error seeding database: " .. tostring(err_req)) 
-    end
+    else print_error("Error seeding database: " .. tostring(err_req)) end
 end
 -- Setup: Create + Migrate + Seed
 function Migrate.setup(db_config)
