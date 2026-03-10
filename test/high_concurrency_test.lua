@@ -1,3 +1,11 @@
+if not describe then
+    print("\n" .. string.rep("=", 60))
+    print("[ERROR] This test file must be run using the 'busted' test runner.")
+    print("Usage: busted " .. (arg and arg[0] or "test/high_concurrency_test.lua"))
+    print(string.rep("=", 60) .. "\n")
+    os.exit(1)
+end
+
 local cqueues = require("cqueues")
 local http_request = require("http.request")
 local rio = require("rio")

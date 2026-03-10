@@ -48,7 +48,7 @@ function SQLiteAdapter:get_table_options() return "" end
 function SQLiteAdapter:get_timestamp_default() return "DEFAULT CURRENT_TIMESTAMP" end
 
 function SQLiteAdapter.escape_value(value)
-    if value == nil then return "0" end -- In SQLite context, nil often means false/0 for boolean columns
+    if value == nil then return "NULL" end
     if type(value) == "number" then return tostring(value) end
     if type(value) == "boolean" then return value and "1" or "0" end
     return "'" .. tostring(value):gsub("'", "''") .. "'"
@@ -84,15 +84,33 @@ local function escape_params(conn, sql, params)
     return escaped_sql
 end
 
+-- Private helper for cooperative execution
+local function execute_cooperative(conn, sql)
+    if conn.getfd and conn.send_query then
+        local ok, cq_err = pcall(require, "cqueues")
+        if ok and type(cq_err) == "table" and cq_err.poll then
+            local cqueues = cq_err
+            local fd = conn:getfd()
+            
+            local send_ok, send_err = conn:send_query(sql)
+            if not send_ok then return nil, send_err end
+
+            if fd >= 0 then cqueues.poll(fd, "r", 0) end
+            return conn:get_result()
+        end
+    end
+    return conn:execute(sql)
+end
+
 -- Data manipulation
 function SQLiteAdapter:query(sql, bindings)
     local conn, env = self:get_connection()
     if not conn then return nil, env end
     
     local final_sql = escape_params(conn, sql, bindings)
-    local cur, err = conn:execute(final_sql)
+    local cur, err = execute_cooperative(conn, final_sql)
     
-    if not cur then
+    if not cur and err then
         self:release_connection(conn, env)
         return nil, err
     end
@@ -127,13 +145,13 @@ function SQLiteAdapter:insert(sql, bindings)
     if not conn then return nil, env end
     
     local final_sql = escape_params(conn, sql, bindings)
-    local _, err = conn:execute(final_sql)
+    local res, err = execute_cooperative(conn, final_sql)
     if err then
         self:release_connection(conn, env)
         return nil, err
     end
     
-    local cur_id = conn:execute("SELECT last_insert_rowid() as id")
+    local cur_id, id_err = execute_cooperative(conn, "SELECT last_insert_rowid() as id")
     local id = nil
     if type(cur_id) == "number" then
         id = cur_id
