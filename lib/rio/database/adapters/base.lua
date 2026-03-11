@@ -103,15 +103,17 @@ function BaseAdapter:execute_async(sql, bindings)
         return res, err
     end
 
-    local ok, err = conn:send_query(final_sql)
-    if not ok then 
+    local initial_status, err = conn:send_query(final_sql)
+    if initial_status == nil and err then 
         self:release_connection(conn, env_obj)
         return nil, err 
     end
 
     -- Cooperative polling
-    local is_busy = true
-    local status = 0
+    local status = type(initial_status) == "number" and initial_status or 0
+    local is_busy = (status ~= 0)
+    if type(initial_status) == "boolean" then is_busy = initial_status end
+
     while is_busy do
         -- For MySQL/MariaDB, poll expects the last status
         is_busy, status = conn:poll(status)
@@ -119,6 +121,10 @@ function BaseAdapter:execute_async(sql, bindings)
             local fd = conn:getfd()
             if fd and coroutine.running() then
                 self:wait_for_connection(fd)
+            elseif not coroutine.running() then
+                -- Fallback to prevent tight-loops if executed synchronously without yielding
+                local ok_cq, cq = pcall(require, "cqueues")
+                if ok_cq and cq.poll and fd then cq.poll(fd, "r", 0.01) end
             end
         end
     end
@@ -213,6 +219,60 @@ function BaseAdapter:execute_async(sql, bindings)
     else
         return parsed_results
     end
+end
+
+function BaseAdapter:async_query(sql, bindings)
+    local res, err, conn, env = self:execute_async(sql, bindings)
+    -- We do not release connection here if execute_async already releases it!
+    -- Wait, execute_async releases the connection before returning. Let's make sure:
+    -- Ah, in the current execute_async it says:
+    -- self:release_connection(conn, env_obj)
+    -- return parsed_results[1] or parsed_results
+    -- So conn is already released!
+    return res, err
+end
+
+function BaseAdapter:async_insert(sql, bindings)
+    -- Let's run execute_async, but we need the ID.
+    -- If execute_async releases the connection, we can't get the ID reliably on SQLite.
+    -- Let's do a direct approach for async_insert
+    local conn, env = self:get_connection()
+    if not conn then return nil, "No connection" end
+    
+    local final_sql = (self.escape_params and self:escape_params(conn, sql, bindings)) or sql
+    local ok, err = conn:execute(final_sql)
+    if not ok then
+        self:release_connection(conn, env)
+        return nil, err
+    end
+
+    local driver = self.get_driver_name and self:get_driver_name() or "sqlite"
+    local id_query = "SELECT last_insert_rowid() as id"
+    if driver == "mysql" then id_query = "SELECT LAST_INSERT_ID() as id"
+    elseif driver == "postgres" then id_query = "SELECT lastval() as id" end
+
+    local id_ok, cur = pcall(function() return conn:execute(id_query) end)
+    local id = nil
+    if id_ok and cur then
+        if type(cur) == "number" then
+            id = cur
+        else
+            local row = cur:fetch({}, "a")
+            id = row and (row.id or row.ID or row[1])
+            cur:close()
+        end
+    end
+
+    self:release_connection(conn, env)
+    return tonumber(id) or id
+end
+
+function BaseAdapter:async_update(sql, bindings)
+    return self:async_query(sql, bindings)
+end
+
+function BaseAdapter:async_delete(sql, bindings)
+    return self:async_update(sql, bindings)
 end
 
 function BaseAdapter:wait_for_connection(fd)

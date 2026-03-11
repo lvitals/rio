@@ -238,6 +238,13 @@ function Model:find_by(attrs) local q = self:query(); for k,v in pairs(attrs) do
 function Model:find_or_create_by(attrs) local r = self:find_by(attrs); return r or self:create(attrs) end
 function Model:first_or_create(attrs) return self:find_or_create_by(attrs) end
 
+-- Async Query Methods
+function Model:async_find(id) return self:query():where(self.primary_key or "id", id):async_first() end
+function Model:async_all() return self:query():async_get() end
+function Model:async_first() return self:query():async_first() end
+function Model:async_last() return self:query():orderBy(self.primary_key or "id", "DESC"):async_first() end
+function Model:async_find_by(attrs) local q = self:query(); for k,v in pairs(attrs) do q:where(k,v) end; return q:async_first() end
+
 function Model:exists(conds)
     local q = self:query()
     if type(conds) == "table" then for k,v in pairs(conds) do q:where(k,v) end
@@ -245,19 +252,31 @@ function Model:exists(conds)
     return q:count() > 0
 end
 
+function Model:async_exists(conds)
+    local q = self:query()
+    if type(conds) == "table" then for k,v in pairs(conds) do q:where(k,v) end
+    elseif conds ~= nil then q:where(self.primary_key or "id", conds) end
+    return q:async_count() > 0
+end
+
 function Model:where(c, o, v) return self:query():where(c, o, v) end
 function Model:limit(n) return self:query():limit(n) end
 function Model:order(c, d) return self:query():orderBy(c, d) end
 
 function Model:count() return self:query():count() end
+function Model:async_count() return self:query():async_count() end
+
 function Model:sum(c) return self:query():sum(c) end
 function Model:avg(c) return self:query():avg(c) end
 function Model:min(c) return self:query():min(c) end
 function Model:max(c) return self:query():max(c) end
 
 function Model:delete_all() return self:query():delete() end
+function Model:async_delete_all() return self:query():async_delete() end
 function Model:destroy_all() for _, item in ipairs(self:all()) do item:delete() end end
+
 function Model:raw(s, b) return QueryBuilder.raw(s, b) end
+function Model:async_raw(s, b) local DBM = require("rio.database.manager"); return DBM.async_query(s, b) end
 
 function Model.transaction(cb)
     local DBM = require("rio.database.manager"); DBM.begin()
@@ -272,7 +291,14 @@ end
 function Model:save()
     if not self:validate() then return false end
     if self.before_save then self:before_save() end
-    return self._exists and self:_update() or self:_create() end
+    return self._exists and self:_update() or self:_create() 
+end
+
+function Model:async_save()
+    if not self:validate() then return false end
+    if self.before_save then self:before_save() end
+    return self._exists and self:_async_update() or self:_async_create()
+end
 
 function Model:create(attrs)
     local inst = self:new(attrs)
@@ -280,10 +306,22 @@ function Model:create(attrs)
     return ok and inst or nil, inst
 end
 
+function Model:async_create(attrs)
+    local inst = self:new(attrs)
+    local ok = inst:async_save()
+    return ok and inst or nil, inst
+end
+
 function Model:update(attrs)
     if type(attrs) ~= "table" then return false end
     for k, v in pairs(attrs) do self._attributes[k] = v end
     return self:save()
+end
+
+function Model:async_update(attrs)
+    if type(attrs) ~= "table" then return false end
+    for k, v in pairs(attrs) do self._attributes[k] = v end
+    return self:async_save()
 end
 
 function Model:delete()
@@ -321,6 +359,40 @@ function Model:delete()
     return ok
 end
 
+function Model:async_delete()
+    if not self._exists then return false end
+    
+    -- Handle dependent deletion (sync for now, could be async later)
+    local relations = self.class._relations or {}
+    for name, rel in pairs(relations) do
+        if rel.metadata and rel.metadata.dependent == "destroy" then
+            local associated = self[name]
+            if associated then
+                if rel.metadata.type == "has_many" then
+                    local items = type(associated) == "table" and associated.async_get and associated:async_get() or associated
+                    if type(items) == "table" then
+                        for _, item in ipairs(items) do
+                            if type(item) == "table" and item.async_delete then item:async_delete() end
+                        end
+                    end
+                elseif type(associated) == "table" and associated.async_delete then
+                    associated:async_delete()
+                end
+            end
+        end
+    end
+
+    local id = self[self.primary_key or "id"]
+    local ok
+    if self.class.soft_deletes then
+        ok = self:query():where(self.primary_key or "id", id):async_update({deleted_at = os.date("%Y-%m-%d %H:%M:%S")})
+    else
+        ok = self:query():where(self.primary_key or "id", id):async_delete()
+    end
+    if ok then self._exists = false end
+    return ok
+end
+
 function Model:_create()
     if self.before_create then self.before_create(self) end
     if self.class.timestamps then self.created_at = os.date("%Y-%m-%d %H:%M:%S"); self.updated_at = self.created_at end
@@ -330,11 +402,28 @@ function Model:_create()
     return false
 end
 
+function Model:_async_create()
+    if self.before_create then self.before_create(self) end
+    if self.class.timestamps then self.created_at = os.date("%Y-%m-%d %H:%M:%S"); self.updated_at = self.created_at end
+    local data = self:_filterAttributes(self._attributes)
+    local id = self:query():async_insert(data)
+    if id then self[self.primary_key or "id"] = id; self._exists = true; self._original = self:_copy(self._attributes); return true end
+    return false
+end
+
 function Model:_update()
     if self.before_update then self.before_update(self) end
     if self.class.timestamps then self.updated_at = os.date("%Y-%m-%d %H:%M:%S") end
     local data = self:_filterAttributes(self._attributes); data[self.primary_key or "id"] = nil
     if self:query():where(self.primary_key or "id", self.id):update(data) then self._original = self:_copy(self._attributes); return true end
+    return false
+end
+
+function Model:_async_update()
+    if self.before_update then self.before_update(self) end
+    if self.class.timestamps then self.updated_at = os.date("%Y-%m-%d %H:%M:%S") end
+    local data = self:_filterAttributes(self._attributes); data[self.primary_key or "id"] = nil
+    if self:query():where(self.primary_key or "id", self.id):async_update(data) then self._original = self:_copy(self._attributes); return true end
     return false
 end
 

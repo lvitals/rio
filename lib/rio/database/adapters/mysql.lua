@@ -41,10 +41,10 @@ function MySQLAdapter:connect()
 end
 
 -- Private helper to handle parameter escaping for MySQL
-local function escape_params(conn, sql, params)
+function MySQLAdapter:escape_params(conn, sql, params)
     if not params or #params == 0 then return sql end
     local i = 1
-    local escaped_sql = sql:gsub("%?", function()
+    local escaped_sql = sql:gsub("%%", "%%%%"):gsub("%?", function()
         local param = params[i]
         i = i + 1
         if param == nil then return "NULL" end
@@ -60,12 +60,12 @@ end
 function MySQLAdapter:query(sql, bindings)
     local conn, env = self:get_connection()
     if not conn then return nil, env end
-    
-    local final_sql = escape_params(conn, sql, bindings)
+
+    local final_sql = self:escape_params(conn, sql, bindings)
     local cur, err
 
     -- Cooperative execution via cqueues and MariaDB async API
-    if conn.getfd and conn.send_query and conn.query_cont then
+    if conn.getfd and conn.send_query and conn.poll then
         local ok, cq_err = pcall(require, "cqueues")
         if ok and type(cq_err) == "table" and cq_err.poll then
             local cqueues = cq_err
@@ -75,7 +75,8 @@ function MySQLAdapter:query(sql, bindings)
             local status, ret = conn:send_query(final_sql)
             
             -- Loop through statuses if needed (MariaDB async state machine)
-            while status ~= 0 do
+            local is_busy = (status ~= 0)
+            while is_busy do
                 local mode = "r"
                 if status == 2 then mode = "w" end -- MYSQL_WAIT_WRITE
                 
@@ -83,14 +84,9 @@ function MySQLAdapter:query(sql, bindings)
                 cqueues.poll(fd, mode, 0.01)
                 
                 -- Continue query
-                status, ret = conn:query_cont(status)
+                is_busy, status = conn:poll(status)
             end
 
-            if ret ~= 0 then
-                self:release_connection(conn, env)
-                return nil, "error executing async query"
-            end
-            
             local res, res_err = conn:get_result()
             if res_err then
                 self:release_connection(conn, env)
@@ -132,7 +128,7 @@ function MySQLAdapter:insert(sql, bindings)
     local conn, env = self:get_connection()
     if not conn then return nil, env end
     
-    local final_sql = escape_params(conn, sql, bindings)
+    local final_sql = self:escape_params(conn, sql, bindings)
     local _, err = conn:execute(final_sql)
     if err then
         self:release_connection(conn, env)
@@ -355,5 +351,9 @@ function M.insert(s, b) return get_instance():insert(s, b) end
 function M.update(s, b) return get_instance():update(s, b) end
 function M.delete(s, b) return get_instance():delete(s, b) end
 function M.execute_async(sql, bindings) return get_instance():execute_async(sql, bindings) end
+function M.async_query(sql, bindings) return get_instance():async_query(sql, bindings) end
+function M.async_insert(sql, bindings) return get_instance():async_insert(sql, bindings) end
+function M.async_update(sql, bindings) return get_instance():async_update(sql, bindings) end
+function M.async_delete(sql, bindings) return get_instance():async_delete(sql, bindings) end
 
 return M

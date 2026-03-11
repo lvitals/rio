@@ -42,10 +42,10 @@ function PostgresAdapter:connect()
 end
 
 -- Private helper to handle parameter escaping for Postgres
-local function escape_params(conn, sql, params)
+function PostgresAdapter:escape_params(conn, sql, params)
     if not params or #params == 0 then return sql end
     local i = 1
-    local escaped_sql = sql:gsub("%?", function()
+    local escaped_sql = sql:gsub("%%", "%%%%"):gsub("%?", function()
         local param = params[i]
         i = i + 1
         if param == nil then return "NULL" end
@@ -63,7 +63,7 @@ function PostgresAdapter:query(sql, bindings)
     local conn, env = self:get_connection()
     if not conn then return nil, env end
     
-    local final_sql = escape_params(conn, sql, bindings)
+    local final_sql = self:escape_params(conn, sql, bindings)
     local cur, err
 
     -- Cooperative execution via cqueues if supported
@@ -146,7 +146,7 @@ function PostgresAdapter:insert(sql, bindings)
 
     -- Use the unified polling execute internal helper logic
     local function execute_with_poll(target_sql)
-        local final_sql = escape_params(conn, target_sql, bindings)
+        local final_sql = self:escape_params(conn, target_sql, bindings)
         if conn.send_query and conn.getfd then
             local ok_cq, cqueues = pcall(require, "cqueues")
             if ok_cq and cqueues.poll then
@@ -373,5 +373,9 @@ function M.insert(s, b) return get_instance():insert(s, b) end
 function M.update(s, b) return get_instance():update(s, b) end
 function M.delete(s, b) return get_instance():delete(s, b) end
 function M.execute_async(sql, bindings) return get_instance():execute_async(sql, bindings) end
+function M.async_query(sql, bindings) return get_instance():async_query(sql, bindings) end
+function M.async_insert(sql, bindings) return get_instance():async_insert(sql, bindings) end
+function M.async_update(sql, bindings) return get_instance():async_update(sql, bindings) end
+function M.async_delete(sql, bindings) return get_instance():async_delete(sql, bindings) end
 
 return M

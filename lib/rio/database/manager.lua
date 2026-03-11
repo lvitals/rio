@@ -214,6 +214,29 @@ function M.execute_async(sql, bindings)
     return wrap_adapter_call("execute_async", sql, bindings)
 end
 
+-- Alias for execute_async
+function M.async_query(sql, bindings)
+    return M.execute_async(sql, bindings)
+end
+
+-- Executes an insert query asynchronously and returns the last inserted ID.
+function M.async_insert(sql, bindings)
+    M.clear_query_cache()
+    return wrap_adapter_call("async_insert", sql, bindings)
+end
+
+-- Executes an update query asynchronously and returns the number of affected rows.
+function M.async_update(sql, bindings)
+    M.clear_query_cache()
+    return wrap_adapter_call("async_update", sql, bindings)
+end
+
+-- Executes a delete query asynchronously and returns the number of affected rows.
+function M.async_delete(sql, bindings)
+    M.clear_query_cache()
+    return wrap_adapter_call("async_delete", sql, bindings)
+end
+
 -- Executes an insert query and returns the last inserted ID.
 function M.insert(sql, bindings)
     M.clear_query_cache()
