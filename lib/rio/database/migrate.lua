@@ -73,11 +73,11 @@ function Migrate.run()
         if name and not executed[name] then
             repeat -- Emulate continue
                 pending = pending + 1
-                ui.header("Migrating: " .. name)
+                ui.alert_title("primary", "migrating", name)
                 
                 local ok, mod = pcall(require, file:gsub("%.lua$", ""):gsub("/", "."))
                 if not ok then
-                    print_error("Error loading migration: " .. tostring(mod))
+                    ui.error("Error loading migration: " .. tostring(mod))
                     break
                 end
                 
@@ -87,7 +87,7 @@ function Migrate.run()
                 if type(sql) == "string" and sql ~= "" then
                     local res_ex, err_ex = conn:execute(sql)
                     if not res_ex then
-                        print_error("Execution failed: " .. tostring(err_ex))
+                        ui.error("Execution failed: " .. tostring(err_ex))
                         break
                     end
                 end
@@ -96,7 +96,7 @@ function Migrate.run()
                 adapter.record_migration(conn, name, current_batch)
                 if conn.commit then conn:commit() end
                 
-                ui.status("Migration status", true, "Success")
+                ui.success("Done!")
             until true
         end
     end
@@ -113,7 +113,7 @@ function Migrate.rollback()
     print_header("Rolling Back Migrations")
     local conn, err = DB:get_connection()
     if not conn then
-        print_error(tostring(err or "Failed to connect to the database."))
+        ui.error(tostring(err or "Failed to connect to the database."))
         return
     end
     local adapter_name = DB.get_adapter_name and DB.get_adapter_name() or "sqlite"
@@ -121,7 +121,7 @@ function Migrate.rollback()
 
     local last_batch = adapter.get_last_batch(conn)
     if last_batch == 0 then
-        print_info("No migrations to rollback.")
+        ui.info("No migrations to rollback.")
         return
     end
 
@@ -130,26 +130,26 @@ function Migrate.rollback()
     local rolled = 0
     for _, name in ipairs(migrations_in_batch) do
         repeat
-            print(colors.yellow .. "→ Rolling back: " .. name .. colors.reset)
+            ui.alert_title("warning", "rollback", name)
             local ok, mod = pcall(require, "db.migrate." .. name)
-            if not ok then print_error("  Error loading: " .. tostring(mod)); break end
+            if not ok then ui.error("Error loading: " .. tostring(mod)); break end
             
             local mig_inst = mod:new(conn, adapter_name)
             local sql = mig_inst:down()
             
             if type(sql) == "string" and sql ~= "" then
                 local res_ex, err_ex = conn:execute(sql)
-                if not res_ex then print_error("  Rollback failed: " .. tostring(err_ex)); break end
+                if not res_ex then ui.error("Rollback failed: " .. tostring(err_ex)); break end
             end
             
             -- Remove from history record
             adapter.remove_migration_record(conn, name)
             if conn.commit then conn:commit() end
             rolled = rolled + 1
-            print_success("  Rolled back successfully!")
+            ui.success("Success")
         until true
     end
-    print_success(string.format("Total: %d migration(s) rolled back", rolled))
+    ui.status(string.format("Batch rollback", rolled), true, string.format("Total: %d migration(s) rolled back", rolled))
 end
 
 -- Status

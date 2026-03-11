@@ -345,8 +345,8 @@ local rio_tests = require("rio.utils.tests")
 rio_tests.setup()
 ]])
 
-    print("Project '" .. project_name .. "' created successfully!")
-    print("To run your application, navigate to the project directory and run: lua app.lua or rio server")
+    ui.alert_title("success", "project", project_name .. (api_only and " (API-only)" or "") .. " created successfully!")
+    ui.info("To run your application, navigate to the project directory and run: lua app.lua or rio server")
 end
 
 -- Generator functions
@@ -356,7 +356,7 @@ local function generate_channel(channel_name)
     local camel_name = camel_case(channel_name)
     
     create_dir_if_not_exists("app/channels")
-    print("Generating WebSocket channel: " .. channel_path)
+    ui.alert_title("primary", "generate", "WebSocket channel: " .. channel_path)
     
     local content = {
         "local " .. camel_name .. "Channel = {}",
@@ -382,7 +382,7 @@ local function generate_channel(channel_name)
         if not routes_content:find(ws_route, 1, true) then
             local modified = routes_content:gsub("(.-)end%s*$", "%1" .. ws_route .. "\nend")
             write_file_content(routes_file, modified)
-            print("WebSocket route added to config/routes.lua: /cable/" .. underscored_name)
+            ui.info("/cable/" .. underscored_name, "WS ROUTE")
         end
     end
 end
@@ -395,7 +395,7 @@ local function generate_controller(controller_name, actions, api_only)
     local dir = path:match("(.+)/")
     if dir then create_dir_if_not_exists(dir) end
     
-    print("Generating controller: " .. path .. (api_only and " (API-only)" or ""))
+    ui.alert_title("primary", "generate", "controller: " .. path .. (api_only and " (API-only)" or ""))
 
     local content = {}
     local camelControllerName = camel_case(controller_name:match("([^:]+)$") or controller_name)
@@ -417,14 +417,13 @@ local function generate_controller(controller_name, actions, api_only)
     table.insert(content, "return " .. camelControllerName .. "Controller")
 
     write_file_content(path, table.concat(content, "\n"))
-    print("Controller '" .. controller_name .. "' generated successfully.")
 
     -- Generate test file for the controller
     local test_path = "test/controllers/" .. underscored_name .. "_test.lua"
     local test_dir = test_path:match("(.+)/")
     if test_dir then create_dir_if_not_exists(test_dir) end
     
-    print("Generating controller test: " .. test_path)
+    ui.alert_title("secondary", "generate", "controller test: " .. test_path)
     local test_content = {}
     table.insert(test_content, "local " .. camelControllerName .. "Controller = require(\"app.controllers." .. underscored_name .. "_controller\")")
 
@@ -436,7 +435,7 @@ local function generate_controller(controller_name, actions, api_only)
     table.insert(test_content, "end)")
 
     write_file_content(test_path, table.concat(test_content, "\n"))
-    print("Controller test '" .. controller_name .. "_test' generated successfully.")
+    ui.success("Controller '" .. controller_name .. "' generated successfully.")
 end
 
 local function generate_migration(migration_name, fields, table_name_hint)
@@ -447,7 +446,7 @@ local function generate_migration(migration_name, fields, table_name_hint)
         local existing = handle_check:read("*l")
         handle_check:close()
         if existing and existing ~= "" then
-            print(colors.yellow .. "Notice: Migration '" .. migration_name .. "' already exists at " .. existing .. colors.reset)
+            ui.warn("Migration '" .. migration_name .. "' already exists at " .. existing)
             return existing:match("db/migrate/(.+)")
         end
     end
@@ -455,7 +454,7 @@ local function generate_migration(migration_name, fields, table_name_hint)
     local timestamp = os.date("%Y%m%d%H%M%S")
     local file_name = timestamp .. "_" .. underscore(migration_name) .. ".lua"
     local path = "db/migrate/" .. file_name
-    print("Generating migration: " .. path)
+    ui.alert_title("primary", "generate", "migration: " .. path)
 
     local content = {}
     table.insert(content, "local Migration = require(\"rio.database.migrate\").Migration")
@@ -556,14 +555,14 @@ local function generate_migration(migration_name, fields, table_name_hint)
     table.insert(content, "return " .. camel_case(migration_name))
 
     write_file_content(path, table.concat(content, "\n"))
-    print("Migration '" .. migration_name .. "' generated successfully.")
+    ui.success("Migration '" .. migration_name .. "' generated successfully.")
 end
 
 local function generate_model(model_name, fields)
     -- Support namespaced models for require/class name but use singular path for file
     local resource_pure = model_name:match("([^:]+)$") or model_name
     local path = "app/models/" .. underscore(resource_pure) .. ".lua"
-    print("Generating model: " .. path)
+    ui.alert_title("primary", "generate", "model: " .. path)
 
     local content = {}
     local camelModelName = camel_case(resource_pure)
@@ -626,7 +625,7 @@ local function generate_model(model_name, fields)
                         local new_parent_content = parent_content:gsub("(.-)return%s+([%w_]+)%s*$", "%1" .. inverse_rel .. "\n\nreturn %2")
                         if new_parent_content ~= parent_content then
                             write_file_content(parent_model_path, new_parent_content)
-                            print("Injected inverse relationship '" .. inverse_rel .. "' into " .. parent_model_path)
+                            ui.info(inverse_rel, "RELATION")
                         end
                     end
                 end
@@ -653,7 +652,7 @@ local function generate_model(model_name, fields)
                             local new_parent_content = parent_content:gsub("(.-)return%s+([%w_]+)%s*$", "%1" .. through_rel .. "\n\nreturn %2")
                             if new_parent_content ~= parent_content then
                                 write_file_content(parent_model_path, new_parent_content)
-                                print("Injected N:M relationship '" .. through_rel .. "' into " .. parent_model_path)
+                                ui.info(through_rel, "M:N RELATION")
                             end
                         end
                     end
@@ -666,11 +665,10 @@ local function generate_model(model_name, fields)
     table.insert(content, "return " .. camelModelName)
 
     write_file_content(path, table.concat(content, "\n"))
-    print("Model '" .. resource_pure .. "' generated successfully.")
 
     -- Generate test file for the model
     local test_path = "test/models/" .. underscore(resource_pure) .. "_test.lua"
-    print("Generating model test: " .. test_path)
+    ui.alert_title("secondary", "generate", "model test: " .. test_path)
     local test_content = {}
     table.insert(test_content, "local " .. camelModelName .. " = require(\"app.models." .. underscore(resource_pure) .. "\")")
 
@@ -682,7 +680,7 @@ local function generate_model(model_name, fields)
     table.insert(test_content, "end)")
 
     write_file_content(test_path, table.concat(test_content, "\n"))
-    print("Model test '" .. resource_pure .. "_test' generated successfully.")
+    ui.success("Model '" .. resource_pure .. "' generated successfully.")
     
     -- Also generate a migration for creating the table
     local migration_full_name = "Create" .. camel_case(pluralize(resource_pure))

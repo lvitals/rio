@@ -9,6 +9,18 @@ local colors = compat.colors
 
 M.colors = colors
 
+-- Bootstrap-inspired alert styles
+local alerts = {
+    primary   = { icon = "●", color = colors.blue },
+    secondary = { icon = "●", color = colors.gray },
+    success   = { icon = "✓", color = colors.green },
+    danger    = { icon = "✗", color = colors.red },
+    warning   = { icon = "⚠", color = colors.yellow },
+    info      = { icon = "ℹ", color = colors.cyan },
+    light     = { icon = "•", color = colors.white },
+    dark      = { icon = "■", color = colors.magenta }
+}
+
 -- Private Helpers
 local function get_visible_len(s)
     if not s then return 0 end
@@ -46,6 +58,8 @@ end
 
 M.drawing_box = false
 
+-- Core Components
+
 function M.box(title, content_fn)
     local width = get_terminal_width()
     local inner_width = width - 2
@@ -73,6 +87,35 @@ function M.box(title, content_fn)
     
     print(colors.bold .. colors.cyan .. "╰" .. h_line .. "╯" .. colors.reset)
 end
+
+function M.alert(kind, msg)
+    local style = alerts[kind] or alerts.info
+    local icon = style.icon
+    local color = style.color
+    
+    if M.drawing_box then
+        local width = get_terminal_width()
+        local inner_width = width - 2
+        local content = "  " .. color .. icon .. " " .. colors.reset .. colors.white .. utf8_truncate(msg, inner_width - 6) .. colors.reset
+        local vis_len = get_visible_len(content)
+        local padding = inner_width - vis_len
+        if padding < 0 then padding = 0 end
+        print(colors.bold .. colors.cyan .. "│" .. colors.reset .. content .. string.rep(" ", padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
+    else
+        print("  " .. color .. icon .. " " .. colors.reset .. colors.white .. msg .. colors.reset)
+    end
+end
+
+function M.alert_title(kind, title, msg)
+    local style = alerts[kind] or alerts.info
+    local prefix = style.color .. style.icon .. " " .. title:upper() .. colors.reset
+    M.text(prefix .. " " .. colors.gray .. "—" .. colors.reset .. " " .. msg)
+end
+
+-- Convenience methods
+function M.success(msg) M.alert("success", msg) end
+function M.error(msg)   M.alert("danger", msg) end
+function M.warn(msg)    M.alert("warning", msg) end
 
 function M.status(label, success, details)
     local width = get_terminal_width()
@@ -148,26 +191,16 @@ function M.row(label, value)
 end
 
 function M.info(msg, label)
-    if M.drawing_box then
-        local width = get_terminal_width()
-        local inner_width = width - 2
-        local content = "  " .. colors.yellow .. "ℹ " .. colors.reset .. colors.bold .. colors.white .. utf8_truncate(msg, inner_width - 4) .. colors.reset
-        local vis_len = get_visible_len(content)
-        local padding = inner_width - vis_len
-        if padding < 0 then padding = 0 end
-        print(colors.bold .. colors.cyan .. "│" .. colors.reset .. content .. string.rep(" ", padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
+    if label then
+        -- Backward compatibility for info with labels
+        local pipe_pos = 30
+        local left = "  " .. label
+        local vis_left = get_visible_len(left)
+        local fill = pipe_pos - vis_left
+        if fill < 1 then fill = 1 end
+        print(left .. string.rep(" ", fill) .. colors.gray .. "» " .. colors.reset .. colors.bold .. colors.white .. msg .. colors.reset)
     else
-        local icon = colors.yellow .. "ℹ" .. colors.reset
-        if label then
-            local pipe_pos = 30
-            local left = "  " .. label
-            local vis_left = get_visible_len(left)
-            local fill = pipe_pos - vis_left
-            if fill < 1 then fill = 1 end
-            print(left .. string.rep(" ", fill) .. colors.gray .. "» " .. colors.reset .. colors.bold .. colors.white .. msg .. colors.reset)
-        else
-            print("  " .. icon .. " " .. colors.gray .. "» " .. colors.reset .. colors.bold .. colors.white .. msg .. colors.reset)
-        end
+        M.alert("info", msg)
     end
 end
 
