@@ -339,4 +339,28 @@ else
     }
 end
 
+-- Async Cooperation (cqueues fallback)
+local cq_ok, cqueues = pcall(require, "cqueues")
+if cq_ok then
+    M.cqueues = cqueues
+else
+    -- Robust Mock for cqueues if not available
+    M.cqueues = {
+        new = function()
+            return {
+                wrap = function(self, fn) self.fn = fn end,
+                loop = function(self) 
+                    local co = coroutine.create(self.fn)
+                    local ok, err = coroutine.resume(co)
+                    if not ok then return false, err end
+                    return true
+                end
+            }
+        end,
+        monotime = os.clock
+    }
+    -- Inject into package.loaded so adapters and other modules find the mock
+    package.loaded.cqueues = { poll = function() end }
+end
+
 return M

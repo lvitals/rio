@@ -238,4 +238,68 @@ function M.header(title)
     print("\n" .. colors.bold .. colors.magenta .. " ❯ " .. colors.white .. title:upper() .. colors.reset)
 end
 
+-- Professional SQL-style Table Renderer
+function M.table(data, title)
+    if title then 
+        M.header(title)
+    end
+
+    if not data or (type(data) == "table" and #data == 0) then
+        M.text(colors.gray .. "  (Empty result set)" .. colors.reset)
+        return
+    end
+
+    -- Handle Multi-result sets
+    if data[1] and type(data[1]) == "table" and data[1][1] and type(data[1][1]) == "table" then
+        for i, set in ipairs(data) do
+            M.table(set, "Result Set #" .. i)
+        end
+        return
+    end
+
+    -- 1. Extract columns and calculate widths
+    local cols = {}
+    local first_row = data[1] or {}
+    if first_row._attributes then first_row = first_row._attributes end -- Model support
+    
+    for k, _ in pairs(first_row) do table.insert(cols, k) end
+    table.sort(cols)
+
+    local widths = {}
+    for _, col in ipairs(cols) do
+        widths[col] = get_visible_len(col)
+        for _, row in ipairs(data) do
+            local r_data = row._attributes or row
+            local val = r_data[col]
+            local str_val = tostring(val == nil and "NULL" or val)
+            widths[col] = math.max(widths[col], get_visible_len(str_val))
+        end
+    end
+
+    -- 2. Build table strings
+    local header = "  |"
+    local separator = "  +"
+    for _, col in ipairs(cols) do
+        header = header .. " " .. col .. string.rep(" ", widths[col] - get_visible_len(col)) .. " |"
+        separator = separator .. string.rep("-", widths[col] + 2) .. "+"
+    end
+
+    -- 3. Print with box awareness
+    M.text(colors.white .. separator .. colors.reset)
+    M.text(colors.bold .. colors.white .. header .. colors.reset)
+    M.text(colors.white .. separator .. colors.reset)
+
+    for _, row in ipairs(data) do
+        local r_data = row._attributes or row
+        local line = "  |"
+        for _, col in ipairs(cols) do
+            local val = r_data[col]
+            local str_val = tostring(val == nil and "NULL" or val)
+            line = line .. " " .. str_val .. string.rep(" ", widths[col] - get_visible_len(str_val)) .. " |"
+        end
+        M.text(line)
+    end
+    M.text(colors.white .. separator .. colors.reset)
+end
+
 return M
