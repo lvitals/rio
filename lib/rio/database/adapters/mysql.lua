@@ -26,7 +26,9 @@ function MySQLAdapter:connect()
         self.config.username,
         self.config.password,
         self.config.host,
-        self.config.port
+        self.config.port,
+        nil,  -- unix_socket
+        65536 -- client_flag: CLIENT_MULTI_STATEMENTS
     )
     
     if not conn then

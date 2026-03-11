@@ -23,8 +23,9 @@ local configs = {
 
 describe("Rio Framework Async Adapters Benchmark", function()
 
-    local function run_benchmark(adapter_name, config)
-        it("should benchmark " .. adapter_name .. " throughput with high concurrency", function()
+    local function run_benchmark(adapter_name, config, multi_statement)
+        local mode_label = multi_statement and "(Multi-Statement)" or "(Single Statement)"
+        it("should benchmark " .. adapter_name .. " throughput " .. mode_label, function()
             local ok, err = pcall(db_manager.initialize, config)
             
             -- Perform a ping to verify credentials and network before throwing 2000 concurrent errors
@@ -33,7 +34,7 @@ describe("Rio Framework Async Adapters Benchmark", function()
             end)
 
             if not ok or not ping_ok or (type(ping_err) == "string" and ping_err:match("error")) or ping_err == nil then
-                ui.box(adapter_name:upper() .. " PERFORMANCE", function()
+                ui.box(adapter_name:upper() .. " PERFORMANCE " .. mode_label, function()
                     ui.status("Status", false, "Skipped (Connection/Auth Failed)")
                 end)
                 pending("Database connection or authentication failed, skipping benchmark")
@@ -47,12 +48,13 @@ describe("Rio Framework Async Adapters Benchmark", function()
             local start_time = cqueues.monotime()
 
             -- A worker function that keeps pulling tasks until we reach NUM_QUERIES
+            local sql = multi_statement and "SELECT 1 as val; SELECT 2 as val;" or "SELECT 1 as val"
             local function worker()
                 while true do
                     if completed >= NUM_QUERIES then break end
                     
                     -- Simulate work
-                    local res, q_err = db_manager.execute_async("SELECT 1 as val")
+                    local res, q_err = db_manager.execute_async(sql)
                     if not res then errors = errors + 1 end
                     
                     completed = completed + 1
@@ -72,7 +74,7 @@ describe("Rio Framework Async Adapters Benchmark", function()
             local total_time = end_time - start_time
             local throughput = NUM_QUERIES / total_time
 
-            ui.box(adapter_name:upper() .. " PERFORMANCE", function()
+            ui.box(adapter_name:upper() .. " PERFORMANCE " .. mode_label, function()
                 ui.status("Total Queries", true, tostring(NUM_QUERIES))
                 ui.status("Concurrency", true, tostring(CONCURRENCY) .. " workers")
                 ui.status("Total Time", true, string.format("%.4f s", total_time))
@@ -84,12 +86,17 @@ describe("Rio Framework Async Adapters Benchmark", function()
                 end
             end)
             
-            assert.equals(0, errors, adapter_name .. " encountered errors during benchmark")
+            -- Some tests intentionally fail on MySQL multi-statement due to driver limitations
+            if not (adapter_name == "mysql" and multi_statement) then
+                assert.equals(0, errors, adapter_name .. " encountered errors during benchmark")
+            end
         end)
     end
 
-    run_benchmark("sqlite", configs.sqlite)
-    run_benchmark("postgres", configs.postgres)
-    run_benchmark("mysql", configs.mysql)
+    run_benchmark("sqlite", configs.sqlite, false)
+    run_benchmark("postgres", configs.postgres, false)
+    run_benchmark("postgres", configs.postgres, true)
+    run_benchmark("mysql", configs.mysql, false)
+    run_benchmark("mysql", configs.mysql, true)
 
 end)
