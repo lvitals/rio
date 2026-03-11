@@ -123,24 +123,51 @@ function BaseAdapter:execute_async(sql, bindings)
         end
     end
 
-    local cur = conn:get_result()
-    self:release_connection(conn, env_obj)
-
-    if cur and type(cur) == "userdata" then
-        -- Auto-fetch logic identical to query()
-        local res = {}
-        local row = cur:fetch({}, "a")
-        while row do
-            local r = {}
-            for k, v in pairs(row) do r[k] = v end
-            table.insert(res, r)
-            row = cur:fetch({}, "a")
+    local all_results = {}
+    local final_err = nil
+    
+    if self.get_driver_name and self:get_driver_name() == "postgres" then
+        while true do
+            local r, e = conn:get_result()
+            if r == nil and e == nil then break end
+            if e and not final_err then final_err = e end
+            if r then table.insert(all_results, r) end
         end
-        cur:close()
-        return res
+    else
+        local r, e = conn:get_result()
+        if e then final_err = e end
+        if r then table.insert(all_results, r) end
     end
 
-    return cur
+    self:release_connection(conn, env_obj)
+
+    if #all_results == 0 and final_err then
+        return nil, final_err
+    end
+
+    local parsed_results = {}
+    for _, cur in ipairs(all_results) do
+        if cur and type(cur) == "userdata" then
+            local res = {}
+            local row = cur:fetch({}, "a")
+            while row do
+                local r = {}
+                for k, v in pairs(row) do r[k] = v end
+                table.insert(res, r)
+                row = cur:fetch({}, "a")
+            end
+            cur:close()
+            table.insert(parsed_results, res)
+        else
+            table.insert(parsed_results, cur)
+        end
+    end
+
+    if #parsed_results == 1 then
+        return parsed_results[1]
+    else
+        return parsed_results
+    end
 end
 
 function BaseAdapter:wait_for_connection(fd)
@@ -148,7 +175,9 @@ function BaseAdapter:wait_for_connection(fd)
     -- This should be specialized by the runtime if needed
     local ok, cqueues = pcall(require, "cqueues")
     if ok and type(cqueues) == "table" and cqueues.poll then
-        cqueues.poll(fd, "r")
+        -- Poll only for reading with a small timeout to prevent 100% CPU tight loops 
+        -- when waiting for the server response, allowing other coroutines to run.
+        cqueues.poll(fd, "r", 0.01)
     end
 end
 
