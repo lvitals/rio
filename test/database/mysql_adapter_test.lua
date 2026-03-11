@@ -35,7 +35,7 @@ describe("Rio MySQL Adapter", function()
         
         RioUI.box("MySQL/MariaDB Connectivity Info", function()
             RioUI.status("Database Connection", true, config.database)
-            RioUI.status("Driver Async Mode", (conn.query_cont ~= nil), "MariaDB Non-blocking API active")
+            RioUI.status("Driver Async Mode", (conn.poll ~= nil), "MariaDB Non-blocking API active")
             RioUI.status("Cqueues Integration", (pcall(require, "cqueues")), "Ready for Event Loop")
         end)
         

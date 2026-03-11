@@ -209,6 +209,11 @@ function M.query(sql, bindings)
     return wrap_adapter_call("query", sql, bindings)
 end
 
+-- Executes a raw query asynchronously.
+function M.execute_async(sql, bindings)
+    return wrap_adapter_call("execute_async", sql, bindings)
+end
+
 -- Executes an insert query and returns the last inserted ID.
 function M.insert(sql, bindings)
     M.clear_query_cache()

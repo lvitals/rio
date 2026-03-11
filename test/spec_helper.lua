@@ -22,6 +22,19 @@ _G.assert = require("luassert")
 local DBManager = require("rio.database.manager")
 DBManager.verbose = os.getenv("RIO_DEBUG") == "true"
 
+-- DIAGNOSTICS: Print CPATH and LuaSQL driver locations
+if busted then
+    busted.subscribe({ "suite", "start" }, function()
+        print("\n" .. RioColor.bold .. "DEBUG: LUA_CPATH=" .. package.cpath .. RioColor.reset)
+        local ok, sqlite = pcall(require, "luasql.sqlite3")
+        if ok then
+            print(RioColor.green .. "DEBUG: luasql.sqlite3 path=" .. (package.searchpath("luasql.sqlite3", package.cpath) or "not found") .. RioColor.reset)
+        else
+            print(RioColor.red .. "DEBUG: luasql.sqlite3 NOT LOADED" .. RioColor.reset)
+        end
+    end)
+end
+
 -- Pretty Print suite headers
 local original_describe = _G.describe
 _G.describe = function(name, fn)

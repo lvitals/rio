@@ -208,7 +208,8 @@ function M.get_runtime_paths(framework_lib_path)
     local lcp_rocks = output:match("LUA_CPATH=['\"]([^'\"]+)['\"]") or ""
 
     local final_lp = (framework_lib_path or "") .. ";" .. (lp_rocks ~= "" and lp_rocks or lp)
-    local final_lcp = (lcp_rocks ~= "" and lcp_rocks or lcp)
+    -- Priority to LuaRocks for binary drivers to avoid loading obsolete local .so files
+    local final_lcp = (lcp_rocks ~= "" and lcp_rocks .. ";" or "") .. lcp
     
     -- For Lua 5.1, we only append user-tree paths if HOME is explicitly set
     local home = os.getenv("HOME")

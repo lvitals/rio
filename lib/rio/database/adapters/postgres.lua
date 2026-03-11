@@ -79,35 +79,21 @@ function PostgresAdapter:query(sql, bindings)
                 return nil, send_err
             end
 
+            local is_busy = true
+            while is_busy do
+                is_busy = conn:poll()
+                if is_busy then
+                    cqueues.poll(fd, "r", 0.01)
+                end
+            end
+            
             local last_res = nil
             while true do
-                local cons_ok, cons_err = conn:consume_input()
-                if not cons_ok then
-                    if last_res and type(last_res) == "table" and last_res.close then last_res:close() end
-                    self:release_connection(conn, env)
-                    return nil, cons_err
-                end
-                
-                if conn:is_busy() then
-                    -- Use a time-limited poll/yield to avoid serialization issues
-                    -- seen with pure FD polling in some Postgres environments.
-                    -- This ensures other coroutines get CPU time to send their queries.
-                    cqueues.poll(fd, "r", 0.01)
-                else
-                    local res, res_err = conn:get_result()
-                    if res_err then
-                        if last_res and type(last_res) == "table" and last_res.close then last_res:close() end
-                        self:release_connection(conn, env)
-                        return nil, res_err
-                    end
-                    
-                    if res == nil then
-                        break -- all results fetched
-                    end
-                    
-                    if last_res and type(last_res) == "table" and last_res.close then last_res:close() end
-                    last_res = res
-                end
+                local r, e = conn:get_result()
+                if r == nil and e == nil then break end
+                if last_res and type(last_res) == "userdata" and last_res.close then last_res:close() end
+                last_res = r
+                err = e
             end
             cur = last_res
         else
@@ -146,22 +132,49 @@ end
 function PostgresAdapter:insert(sql, bindings)
     local conn, env = self:get_connection()
     if not conn then return nil, env end
-    
-    local final_sql = escape_params(conn, sql, bindings)
-    -- In Postgres, we often need RETURNING id to get the last inserted ID in one go
-    -- But Rio's query builder might send a standard INSERT.
-    local res, err = conn:execute(final_sql)
+
+    -- Use the unified polling execute internal helper logic
+    local function execute_with_poll(target_sql)
+        local final_sql = escape_params(conn, target_sql, bindings)
+        if conn.send_query and conn.getfd then
+            local ok_cq, cqueues = pcall(require, "cqueues")
+            if ok_cq and cqueues.poll then
+                local fd = conn:getfd()
+                conn:send_query(final_sql)
+                local is_busy = true
+                while is_busy do
+                    is_busy = conn:poll()
+                    if is_busy then cqueues.poll(fd, "r", 0.01) end
+                end
+                
+                local last_res, last_err
+                while true do
+                    local r, e = conn:get_result()
+                    if r == nil and e == nil then break end
+                    if last_res and type(last_res) == "userdata" and last_res.close then last_res:close() end
+                    last_res = r
+                    last_err = e
+                end
+                return last_res, last_err
+            end
+        end
+        return conn:execute(final_sql)
+    end
+
+    local res, err = execute_with_poll(sql)
     if not res then
         self:release_connection(conn, env)
         return nil, err
     end
-    
-    -- Fallback to get ID if not using RETURNING
-    local cur_id = conn:execute("SELECT lastval() as id")
+
+    if type(res) == "userdata" and res.close then res:close() end
+
+    -- GET ID using the SAME connection
+    local cur_id, id_err = conn:execute("SELECT lastval() as id")
     local row = cur_id and cur_id:fetch({}, "a")
     local id = row and (row.id or row.ID or row[1])
-    if cur_id then cur_id:close() end
-    
+    if cur_id and type(cur_id) == "userdata" then cur_id:close() end
+
     self:release_connection(conn, env)
     return id and tonumber(id)
 end
@@ -345,5 +358,6 @@ function M.query(s, b) return get_instance():query(s, b) end
 function M.insert(s, b) return get_instance():insert(s, b) end
 function M.update(s, b) return get_instance():update(s, b) end
 function M.delete(s, b) return get_instance():delete(s, b) end
+function M.execute_async(sql, bindings) return get_instance():execute_async(sql, bindings) end
 
 return M

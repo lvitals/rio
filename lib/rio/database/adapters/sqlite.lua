@@ -412,5 +412,6 @@ function M.query(s, b) return get_instance():query(s, b) end
 function M.insert(s, b) return get_instance():insert(s, b) end
 function M.update(s, b) return get_instance():update(s, b) end
 function M.delete(s, b) return get_instance():delete(s, b) end
+function M.execute_async(sql, bindings) return get_instance():execute_async(sql, bindings) end
 
 return M

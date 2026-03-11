@@ -1852,9 +1852,10 @@ local function run_tests(test_args)
         command_args_str = "test/ --pattern=\"_test.lua$\""
     end
 
+    local lua_bin = compat.get_lua_bin()
     local command = string.format(
-        "LUA_PATH='%s;%s' LUA_CPATH='%s' RIO_ENV='test' RIO_HASH_ITERATIONS='1' PATH='%s:%s' busted --output=utfTerminal --helper=test/spec_helper.lua %s",
-        rio_framework_lib_path_global, effective_lua_path, effective_lua_cpath, busted_path_addition, os.getenv("PATH") or "", command_args_str
+        "export LUA_PATH='%s;%s;%s' && export LUA_CPATH='%s;%s' && export RIO_ENV='test' && export RIO_HASH_ITERATIONS='1' && export PATH='%s:%s' && busted --lua=%s --output=utfTerminal --helper=test/spec_helper.lua %s",
+        rio_framework_lib_path_global, effective_lua_path, package.path, effective_lua_cpath, package.cpath, busted_path_addition, os.getenv("PATH") or "", lua_bin, command_args_str
     )
 
     -- Execute the command

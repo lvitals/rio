@@ -90,6 +90,68 @@ end
 function BaseAdapter:create_database(db_config) error("Not implemented") end
 function BaseAdapter:drop_database(db_config) error("Not implemented") end
 
+-- SQL Execution
+function BaseAdapter:execute_async(sql, bindings)
+    local conn, env_obj = self:get_connection()
+    if not conn then return nil, "No connection" end
+
+    local final_sql = self.escape_params and self.escape_params(conn, sql, bindings) or sql
+    -- Fallback to synchronous if driver doesn't support async
+    if not conn.send_query then
+        local res, err = self:query(sql, bindings)
+        self:release_connection(conn, env_obj)
+        return res, err
+    end
+
+    local ok, err = conn:send_query(final_sql)
+    if not ok then 
+        self:release_connection(conn, env_obj)
+        return nil, err 
+    end
+
+    -- Cooperative polling
+    local is_busy = true
+    local status = 0
+    while is_busy do
+        -- For MySQL/MariaDB, poll expects the last status
+        is_busy, status = conn:poll(status)
+        if is_busy then
+            local fd = conn:getfd()
+            if fd and coroutine.running() then
+                self:wait_for_connection(fd)
+            end
+        end
+    end
+
+    local cur = conn:get_result()
+    self:release_connection(conn, env_obj)
+
+    if cur and type(cur) == "userdata" then
+        -- Auto-fetch logic identical to query()
+        local res = {}
+        local row = cur:fetch({}, "a")
+        while row do
+            local r = {}
+            for k, v in pairs(row) do r[k] = v end
+            table.insert(res, r)
+            row = cur:fetch({}, "a")
+        end
+        cur:close()
+        return res
+    end
+
+    return cur
+end
+
+function BaseAdapter:wait_for_connection(fd)
+    -- Integration with cqueues/copas
+    -- This should be specialized by the runtime if needed
+    local ok, cqueues = pcall(require, "cqueues")
+    if ok and type(cqueues) == "table" and cqueues.poll then
+        cqueues.poll(fd, "r")
+    end
+end
+
 -- Migration Tracking (The "Repository" pattern)
 -- This allows NoSQL to store history in collections/keys instead of tables
 function BaseAdapter:ensure_migrations_table(conn) error("Not implemented") end
