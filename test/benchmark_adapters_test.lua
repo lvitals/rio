@@ -86,10 +86,7 @@ describe("Rio Framework Async Adapters Benchmark", function()
                 end
             end)
             
-            -- Some tests intentionally fail on MySQL multi-statement due to driver limitations
-            if not (adapter_name == "mysql" and multi_statement) then
-                assert.equals(0, errors, adapter_name .. " encountered errors during benchmark")
-            end
+            assert.equals(0, errors, adapter_name .. " encountered errors during benchmark")
         end)
     end
 
