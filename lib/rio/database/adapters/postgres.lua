@@ -67,6 +67,9 @@ function PostgresAdapter:query(sql, bindings)
     local cur, err
 
     -- Cooperative execution via cqueues if supported
+    local all_results = {}
+    local final_err = nil
+
     if conn.getfd and conn.send_query then
         local ok, cq_err = pcall(require, "cqueues")
         if ok and type(cq_err) == "table" and cq_err.poll then
@@ -87,46 +90,54 @@ function PostgresAdapter:query(sql, bindings)
                 end
             end
             
-            local last_res = nil
             while true do
                 local r, e = conn:get_result()
                 if r == nil and e == nil then break end
-                if last_res and type(last_res) == "userdata" and last_res.close then last_res:close() end
-                last_res = r
-                err = e
+                if e and not final_err then final_err = e end
+                if r then table.insert(all_results, r) end
             end
-            cur = last_res
         else
             io.stdout:write(" [FALLBACK: NO CQUEUES] ")
-            cur, err = conn:execute(final_sql)
+            local r, e = conn:execute(final_sql)
+            if r then table.insert(all_results, r) else final_err = e end
         end
     else
         io.stdout:write(" [FALLBACK: NO ASYNC DRIVER] ")
-        cur, err = conn:execute(final_sql)
+        local r, e = conn:execute(final_sql)
+        if r then table.insert(all_results, r) else final_err = e end
     end
     
-    if not cur and err then
+    if #all_results == 0 and final_err then
         self:release_connection(conn, env)
-        return nil, err
+        return nil, final_err
     end
     
-    if type(cur) == "number" then -- affected rows
-        self:release_connection(conn, env)
-        return { affected = cur }
+    local parsed_results = {}
+    
+    for _, result_item in ipairs(all_results) do
+        if type(result_item) == "number" then
+            table.insert(parsed_results, { affected = result_item })
+        else
+            local res = {}
+            local row = result_item:fetch({}, "a")
+            while row do
+                local r = {}
+                for k, v in pairs(row) do r[k] = v end
+                table.insert(res, r)
+                row = result_item:fetch({}, "a")
+            end
+            result_item:close()
+            table.insert(parsed_results, res)
+        end
     end
     
-    -- Select results
-    local res = {}
-    local row = cur:fetch({}, "a")
-    while row do
-        local r = {}
-        for k, v in pairs(row) do r[k] = v end
-        table.insert(res, r)
-        row = cur:fetch({}, "a")
-    end
-    cur:close()
     self:release_connection(conn, env)
-    return res
+    
+    if #parsed_results == 1 then
+        return parsed_results[1]
+    else
+        return parsed_results
+    end
 end
 
 function PostgresAdapter:insert(sql, bindings)
@@ -147,27 +158,30 @@ function PostgresAdapter:insert(sql, bindings)
                     if is_busy then cqueues.poll(fd, "r", 0.01) end
                 end
                 
-                local last_res, last_err
+                local all_res = {}
+                local final_err = nil
                 while true do
                     local r, e = conn:get_result()
                     if r == nil and e == nil then break end
-                    if last_res and type(last_res) == "userdata" and last_res.close then last_res:close() end
-                    last_res = r
-                    last_err = e
+                    if e and not final_err then final_err = e end
+                    if r then table.insert(all_res, r) end
                 end
-                return last_res, last_err
+                return all_res, final_err
             end
         end
-        return conn:execute(final_sql)
+        local r, e = conn:execute(final_sql)
+        return r and {r} or nil, e
     end
 
-    local res, err = execute_with_poll(sql)
-    if not res then
+    local res_list, err = execute_with_poll(sql)
+    if not res_list then
         self:release_connection(conn, env)
         return nil, err
     end
 
-    if type(res) == "userdata" and res.close then res:close() end
+    for _, res in ipairs(res_list) do
+        if type(res) == "userdata" and res.close then res:close() end
+    end
 
     -- GET ID using the SAME connection
     local cur_id, id_err = conn:execute("SELECT lastval() as id")
