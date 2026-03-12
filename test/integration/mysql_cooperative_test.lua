@@ -50,4 +50,23 @@ describe("Rio MySQL/MariaDB Cooperative Concurrency", function()
         assert.is_true(cq:loop())
         assert.equals(num_queries, completed)
     end)
+    
+    it("should complete multiple queries without crashing despite sequential execution", function()
+        local cq = cqueues.new()
+        local num_workers = 5
+        local finished_workers = 0
+
+        for i = 1, num_workers do
+            cq:wrap(function()
+                -- SLEEP(0.1) to avoid too much blocking while confirming success
+                local res, err = mysql.query("SELECT SLEEP(0.1) as s")
+                if res then
+                    finished_workers = finished_workers + 1
+                end
+            end)
+        end
+
+        assert.is_true(cq:loop())
+        assert.equals(num_workers, finished_workers)
+    end)
 end)

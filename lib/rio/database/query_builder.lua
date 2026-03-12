@@ -256,58 +256,14 @@ function QueryBuilder:delete()
     return (type(res) == "table" and res.affected) and res.affected >= 0 or res ~= nil
 end
 
--- Async Execution Methods
-function QueryBuilder:async_get()
-    local sql = self:toSql()
-    if self._cache_ttl and _G.app and _G.app.cache then
-        -- Cache is sync but we might be in an async context, ideally cache fetch should be async too
-        -- for now we just fallback to the sync cache if requested
-        local key = "query:" .. sql:gsub("[^%w]", "_")
-        return _G.app.cache:fetch(key, self._cache_ttl, function()
-            local results, err = DBManager.async_query(sql); if err then error(err) end
-            if self._model and results then return self._model:_hydrateAll(results) end
-            return results
-        end)
-    end
-    -- Skip in-memory DBManager cache for async to ensure we actually hit the DB
-    local results, err = DBManager.async_query(sql); if err then error(err) end
-    local final_results = results
-    if self._model and results then final_results = self._model:_hydrateAll(results) end
-    return final_results
-end
-
-function QueryBuilder:async_all() return self:async_get() end
-function QueryBuilder:async_first() self:limit(1); local results = self:async_get(); return (results and #results > 0) and results[1] or nil end
-
-function QueryBuilder:async_count()
-    local original = self._selects; self._selects = {"COUNT(*) as count"}
-    local sql = self:toSql(); self._selects = original
-    local results, err = DBManager.async_query(sql); if err then error(err) end
-    return (results and results[1]) and tonumber(results[1].count) or 0
-end
-
-function QueryBuilder:async_insert(data)
-    if not data or not next(data) then return nil, "No data" end
-    local columns, values = {}, {}
-    for k, v in pairs(data) do table.insert(columns, k); table.insert(values, self:_escapeValue(v)) end
-    local sql = string.format("INSERT INTO %s (%s) VALUES (%s)", self._table, table.concat(columns, ", "), table.concat(values, ", "))
-    return DBManager.async_insert(sql)
-end
-
-function QueryBuilder:async_update(data)
-    if not data or not next(data) then return true end
-    local sets = {}
-    for k, v in pairs(data) do table.insert(sets, string.format("%s = %s", k, self:_escapeValue(v))) end
-    local sql = string.format("UPDATE %s SET %s", self._table, table.concat(sets, ", ")) .. self:_buildWhere()
-    local res, err = DBManager.async_update(sql); if err then error(err) end
-    return (type(res) == "table" and res.affected) and res.affected >= 0 or res ~= nil
-end
-
-function QueryBuilder:async_delete()
-    local sql = "DELETE FROM " .. self._table .. self:_buildWhere()
-    local res, err = DBManager.async_delete(sql); if err then error(err) end
-    return (type(res) == "table" and res.affected) and res.affected >= 0 or res ~= nil
-end
+-- Aliases for backwards compatibility or explicit intent
+function QueryBuilder:async_get() return self:get() end
+function QueryBuilder:async_all() return self:all() end
+function QueryBuilder:async_first() return self:first() end
+function QueryBuilder:async_count() return self:count() end
+function QueryBuilder:async_insert(data) return self:insert(data) end
+function QueryBuilder:async_update(data) return self:update(data) end
+function QueryBuilder:async_delete() return self:delete() end
 
 function QueryBuilder:delete_all() return self:delete() end
 

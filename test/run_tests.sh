@@ -10,7 +10,7 @@ cd "$PROJECT_ROOT" || exit 1
 
 # LUA_VERSIONS=("5.4" "5.3" "5.2" "5.1")
 LUA_VERSIONS=("5.4")
-ROCKSPEC="rio-0.1.0-1.rockspec"
+ROCKSPEC="rio-dev-1.rockspec"
 
 echo "Rio Full Matrix Test Suite"
 echo "============================"

@@ -86,7 +86,7 @@ function PostgresAdapter:query(sql, bindings)
             while is_busy do
                 is_busy = conn:poll()
                 if is_busy then
-                    cqueues.poll(fd, "r", 0.01)
+                    self:wait_for_connection(fd)
                 end
             end
             

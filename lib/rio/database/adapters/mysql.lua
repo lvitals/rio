@@ -77,22 +77,51 @@ function MySQLAdapter:query(sql, bindings)
             -- Loop through statuses if needed (MariaDB async state machine)
             local is_busy = (status ~= 0)
             while is_busy do
-                local mode = "r"
-                if status == 2 then mode = "w" end -- MYSQL_WAIT_WRITE
+                -- Wait for socket using shared logic
+                self:wait_for_connection(fd)
                 
-                -- Wait for socket with a safety timeout
-                cqueues.poll(fd, mode, 0.01)
+                -- Force a yield to allow other coroutines to progress
+                if ok and cq_err.sleep then cq_err.sleep(0) end
                 
                 -- Continue query
                 is_busy, status = conn:poll(status)
             end
 
-            local res, res_err = conn:get_result()
-            if res_err then
-                self:release_connection(conn, env)
-                return nil, res_err
+            local all_results = {}
+            while true do
+                local res, res_err = conn:get_result()
+                if res_err then
+                    self:release_connection(conn, env)
+                    return nil, res_err
+                end
+                
+                if res == nil then break end -- No more results
+                
+                if type(res) == "userdata" then
+                    local res_table = {}
+                    local row = res:fetch({}, "a")
+                    while row do
+                        local r = {}
+                        for k, v in pairs(row) do r[k] = v end
+                        table.insert(res_table, r)
+                        row = res:fetch({}, "a")
+                    end
+                    res:close()
+                    table.insert(all_results, res_table)
+                else
+                    table.insert(all_results, { affected = res })
+                end
+
+                if conn.hasnextresult and not conn:hasnextresult() then
+                    break
+                elseif not conn.hasnextresult then
+                    break
+                end
             end
-            cur = res
+            
+            self:release_connection(conn, env)
+            if #all_results == 1 then return all_results[1] end
+            return all_results
         else
             cur, err = conn:execute(final_sql)
         end
@@ -164,6 +193,12 @@ function MySQLAdapter:get_sql_type(lua_type, options)
     elseif lua_type == "date" then return "DATE"
     elseif lua_type == "time" then return "TIME" end
     return lua_type:upper()
+end
+
+function MySQLAdapter:get_table_options()
+    local engine = self.config.engine or "InnoDB"
+    local charset = self.config.charset or "utf8mb4"
+    return string.format(" ENGINE=%s DEFAULT CHARSET=%s", engine, charset)
 end
 
 function MySQLAdapter:get_table_options()

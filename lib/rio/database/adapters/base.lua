@@ -280,6 +280,8 @@ function BaseAdapter:wait_for_connection(fd)
     -- This should be specialized by the runtime if needed
     local ok, cqueues = pcall(require, "cqueues")
     if ok and type(cqueues) == "table" and cqueues.poll then
+        -- Force a yield to allow other coroutines to progress
+        if cqueues.sleep then cqueues.sleep(0) end
         -- Poll only for reading with a small timeout to prevent 100% CPU tight loops 
         -- when waiting for the server response, allowing other coroutines to run.
         cqueues.poll(fd, "r", 0.01)

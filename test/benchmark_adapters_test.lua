@@ -45,6 +45,16 @@ describe("Rio Framework Async Adapters Benchmark", function()
             local errors = 0
             local completed = 0
             
+            -- Pre-warm pool: ensure all workers have a connection ready
+            local warm_cq = cqueues.new()
+            for i = 1, CONCURRENCY do
+                warm_cq:wrap(function()
+                    local conn, env = db_manager.get_connection()
+                    db_manager.release_connection(conn, env)
+                end)
+            end
+            warm_cq:loop()
+
             local start_time = cqueues.monotime()
 
             -- A worker function that keeps pulling tasks until we reach NUM_QUERIES
