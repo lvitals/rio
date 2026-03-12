@@ -58,7 +58,10 @@ describe("Rio Framework Async Adapters Benchmark", function()
             local start_time = cqueues.monotime()
 
             -- A worker function that keeps pulling tasks until we reach NUM_QUERIES
+            local statements_per_req = multi_statement and 2 or 1
+            local total_workload = NUM_QUERIES * statements_per_req
             local sql = multi_statement and "SELECT 1 as val; SELECT 2 as val;" or "SELECT 1 as val"
+            
             local function worker()
                 while true do
                     if completed >= NUM_QUERIES then break end
@@ -82,13 +85,17 @@ describe("Rio Framework Async Adapters Benchmark", function()
             assert.is_true(success, "Cqueues loop error: " .. tostring(cq_err))
 
             local total_time = end_time - start_time
-            local throughput = NUM_QUERIES / total_time
+            local throughput_req = NUM_QUERIES / total_time
+            local throughput_stmt = total_workload / total_time
 
             ui.box(adapter_name:upper() .. " PERFORMANCE " .. mode_label, function()
-                ui.status("Total Queries", true, tostring(NUM_QUERIES))
+                ui.status("Total Requests", true, tostring(NUM_QUERIES))
+                ui.status("Statements/Req", true, tostring(statements_per_req))
+                ui.status("Total Workload", true, tostring(total_workload) .. " results")
                 ui.status("Concurrency", true, tostring(CONCURRENCY) .. " workers")
                 ui.status("Total Time", true, string.format("%.4f s", total_time))
-                ui.status("Throughput", true, string.format("%.2f req/s", throughput))
+                ui.status("Throughput (Req/s)", true, string.format("%.2f", throughput_req))
+                ui.status("Throughput (Stmt/s)", true, string.format("%.2f", throughput_stmt))
                 if errors > 0 then
                     ui.status("Errors", false, tostring(errors))
                 else
