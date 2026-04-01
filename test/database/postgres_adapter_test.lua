@@ -19,19 +19,30 @@ describe("Rio PostgreSQL Adapter", function()
         pool = 5
     }
 
+    local has_db = false
+
     setup(function()
         local ok, err = pcall(postgres.initialize, config)
-        if not ok then
-            print("\n[SKIP] PostgreSQL not available: " .. tostring(err))
-            return
+        if ok then
+            local conn = postgres.get_connection()
+            if conn then
+                has_db = true
+                postgres.release_connection(conn)
+                -- Clean and setup test table
+                postgres.query("DROP TABLE IF EXISTS rio_pg_test")
+                postgres.query("CREATE TABLE rio_pg_test (id SERIAL PRIMARY KEY, name VARCHAR(255))")
+            end
         end
-        
-        -- Clean and setup test table
-        postgres.query("DROP TABLE IF EXISTS rio_pg_test")
-        postgres.query("CREATE TABLE rio_pg_test (id SERIAL PRIMARY KEY, name VARCHAR(255))")
+    end)
+
+    teardown(function()
+        if has_db then
+            postgres.query("DROP TABLE IF EXISTS rio_pg_test")
+        end
     end)
 
     it("should connect and provide diagnostic info", function()
+        if not has_db then pending("No database connection"); return end
         local conn, env = postgres.get_connection()
         assert.is_not_nil(conn)
         
@@ -45,6 +56,7 @@ describe("Rio PostgreSQL Adapter", function()
     end)
 
     it("should perform basic CRUD operations", function()
+        if not has_db then pending("No database connection"); return end
         -- Insert
         local id1 = postgres.insert("INSERT INTO rio_pg_test (name) VALUES (?)", {"Alice"})
         local id2 = postgres.insert("INSERT INTO rio_pg_test (name) VALUES (?)", {"Bob"})
@@ -66,6 +78,7 @@ describe("Rio PostgreSQL Adapter", function()
     end)
 
     it("should support cooperative execution with cqueues", function()
+        if not has_db then pending("No database connection"); return end
         local cq = cqueues.new()
         local results = {}
         local count = 5
@@ -87,6 +100,7 @@ describe("Rio PostgreSQL Adapter", function()
     end)
 
     it("should escape values correctly", function()
+        if not has_db then pending("No database connection"); return end
         assert.equals("'O''Reilly'", postgres.escape_value("O'Reilly"))
         assert.equals("TRUE", postgres.escape_value(true))
         assert.equals("FALSE", postgres.escape_value(false))

@@ -18,20 +18,28 @@ describe("Rio MySQL/MariaDB Cooperative Concurrency", function()
         pool = 10
     }
 
+    local has_db = false
+
     setup(function()
         local ok = pcall(mysql.initialize, config)
-        if not ok then
-            print("\n[SKIP] MySQL not available for cooperative test.")
-            return
+        if ok then
+            local conn = mysql.get_connection()
+            if conn then
+                has_db = true
+                mysql.release_connection(conn)
+                mysql.query("CREATE TABLE IF NOT EXISTS rio_mysql_coop_test (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255))")
+            end
         end
-        mysql.query("CREATE TABLE IF NOT EXISTS rio_mysql_coop_test (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255))")
     end)
 
     teardown(function()
-        mysql.query("DROP TABLE IF EXISTS rio_mysql_coop_test")
+        if has_db then
+            mysql.query("DROP TABLE IF EXISTS rio_mysql_coop_test")
+        end
     end)
 
     it("should handle 20 concurrent operations without blocking", function()
+        if not has_db then pending("No database connection"); return end
         local cq = cqueues.new()
         local num_queries = 20
         local completed = 0
@@ -52,6 +60,7 @@ describe("Rio MySQL/MariaDB Cooperative Concurrency", function()
     end)
     
     it("should complete multiple queries without crashing despite sequential execution", function()
+        if not has_db then pending("No database connection"); return end
         local cq = cqueues.new()
         local num_workers = 5
         local finished_workers = 0

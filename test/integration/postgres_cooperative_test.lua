@@ -19,15 +19,21 @@ describe("Rio PostgreSQL Cooperative Concurrency", function()
         pool = 20
     }
 
+    local has_db = false
+
     setup(function()
         local ok = pcall(postgres.initialize, config)
-        if not ok then
-            print("\n[SKIP] PostgreSQL not available for cooperative test.")
-            return
+        if ok then
+            local conn = postgres.get_connection()
+            if conn then
+                has_db = true
+                postgres.release_connection(conn)
+            end
         end
     end)
 
     it("should handle 10 parallel 1-second queries in ~1 second total", function()
+        if not has_db then pending("No database connection"); return end
         local cq = cqueues.new()
         local num_queries = 10
         local completed = 0

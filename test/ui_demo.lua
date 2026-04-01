@@ -20,7 +20,7 @@ ui.alert_title("warning", "Cache", "Memory limit reached")
 
 print("\n--- BOXED UI WITH ALERTS ---")
 ui.box("System Status", function()
-    ui.alert("primary", "Rio Framework v0.1.13")
+    ui.alert("primary", "Rio Framework")
     ui.text("Checking components...")
     ui.success("Core engine initialized")
     ui.success("Middleware stack ready")
