@@ -290,51 +290,62 @@ else
             local socket = require("socket")
             local url = require("net.url")
             local master = assert(socket.bind(options.host or "0.0.0.0", options.port or 8080))
-            local ip, port = master:getsockname()
-            print(string.format("Rio (LuaSocket fallback) listening on http://%s:%d", ip, port))
-            while true do
-                local client = master:accept()
-                client:settimeout(10)
-                local line = client:receive()
-                if line then
-                    local method, full_path = line:match("^(%S+)%s+(%S+)%s+HTTP/%d%.%d$")
-                    if method then
-                        local req_headers = {}
-                        while true do
-                            local h_line = client:receive()
-                            if not h_line or h_line == "" then break end
-                            local name, value = h_line:match("^(.-):%s*(.*)$")
-                            if name then req_headers[name:lower()] = value end
+            master:settimeout(0.5) -- Allow SIGINT interruption
+            
+            return {
+                close = function(self)
+                    if master then master:close() end
+                end,
+                loop = function(self)
+                    while true do
+                        local client, err = master:accept()
+                        if client then
+                            client:settimeout(10)
+                            local line = client:receive()
+                            if line then
+                                local method, full_path = line:match("^(%S+)%s+(%S+)%s+HTTP/%d%.%d$")
+                                if method then
+                                    local req_headers = {}
+                                    while true do
+                                        local h_line = client:receive()
+                                        if not h_line or h_line == "" then break end
+                                        local name, value = h_line:match("^(.-):%s*(.*)$")
+                                        if name then req_headers[name:lower()] = value end
+                                    end
+                                    local body = ""
+                                    local clen = tonumber(req_headers["content-length"])
+                                    if clen and clen > 0 then body = client:receive(clen) end
+                                    local stream = {
+                                        headers_sent = false,
+                                        get_headers = function()
+                                            local h = create_header_obj(req_headers)
+                                            h:upsert(":method", method)
+                                            h:upsert(":path", full_path)
+                                            return h
+                                        end,
+                                        write_headers = function(self, h)
+                                            self.headers_sent = true
+                                            client:send("HTTP/1.1 " .. (h:get(":status") or "200") .. " OK\r\n")
+                                            for k, v in h:each() do if k:sub(1,1) ~= ":" then client:send(k .. ": " .. v .. "\r\n") end end
+                                            client:send("\r\n"); return true
+                                        end,
+                                        write_body_from_string = function(self, d) client:send(d); return true end,
+                                        get_body_as_string = function() return body end,
+                                        close = function() client:close() end,
+                                        shutdown = function() client:close() end
+                                    }
+                                    xpcall(function() options.onstream(nil, stream) end, function(err2)
+                                        print("Request Error: " .. tostring(err2))
+                                        client:close()
+                                    end)
+                                else client:close() end
+                            else client:close() end
+                        elseif err ~= "timeout" and not tostring(err):find("interrupted") then
+                            break
                         end
-                        local body = ""
-                        local clen = tonumber(req_headers["content-length"])
-                        if clen and clen > 0 then body = client:receive(clen) end
-                        local stream = {
-                            headers_sent = false,
-                            get_headers = function()
-                                local h = create_header_obj(req_headers)
-                                h:upsert(":method", method)
-                                h:upsert(":path", full_path)
-                                return h
-                            end,
-                            write_headers = function(self, h)
-                                self.headers_sent = true
-                                client:send("HTTP/1.1 " .. (h:get(":status") or "200") .. " OK\r\n")
-                                for k, v in h:each() do if k:sub(1,1) ~= ":" then client:send(k .. ": " .. v .. "\r\n") end end
-                                client:send("\r\n"); return true
-                            end,
-                            write_body_from_string = function(self, d) client:send(d); return true end,
-                            get_body_as_string = function() return body end,
-                            close = function() client:close() end,
-                            shutdown = function() client:close() end
-                        }
-                        xpcall(function() options.onstream(nil, stream) end, function(err)
-                            print("Request Error: " .. tostring(err))
-                            client:close()
-                        end)
-                    else client:close() end
-                else client:close() end
-            end
+                    end
+                end
+            }
         end
     }
 end

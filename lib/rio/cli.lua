@@ -1317,11 +1317,9 @@ local function run_server(server_options)
                 end
             else
                 local full_command_line = string.format(server_command_template, effective_lua_path, effective_lua_cpath, environment, host, current_port)
-                print(colors.cyan .. string.format("Attempting to start server on http://%s:%d...", host, current_port) .. colors.reset)
-                
+
                 -- Execute normally in foreground (all output goes to terminal)
-                os.execute(full_command_line)
-                return
+                os.execute(full_command_line)                return
             end
         end
     end

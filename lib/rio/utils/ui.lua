@@ -56,6 +56,31 @@ local function get_terminal_width()
     return default
 end
 
+local function process_text_lines(text)
+    local lines = {}
+    for line in string.gmatch(tostring(text) .. "\n", "(.-)\n") do
+        table.insert(lines, line)
+    end
+    if lines[#lines] == "" and #lines > 1 then table.remove(lines) end
+    
+    local processed = {}
+    for _, line in ipairs(lines) do
+        -- process \t
+        line = line:gsub("\t", "    ")
+        -- process \b
+        while line:find("[^\b]\b") do
+            line = line:gsub("[^\b]\b", "")
+        end
+        line = line:gsub("^\b+", "")
+        -- process \r
+        if line:find("\r") then
+            line = line:match(".*\r(.*)")
+        end
+        table.insert(processed, line)
+    end
+    return processed
+end
+
 M.drawing_box = false
 
 -- Core Components
@@ -93,16 +118,22 @@ function M.alert(kind, msg)
     local icon = style.icon
     local color = style.color
     
-    if M.drawing_box then
-        local width = get_terminal_width()
-        local inner_width = width - 2
-        local content = "  " .. color .. icon .. " " .. colors.reset .. colors.white .. utf8_truncate(msg, inner_width - 6) .. colors.reset
-        local vis_len = get_visible_len(content)
-        local padding = inner_width - vis_len
-        if padding < 0 then padding = 0 end
-        print(colors.bold .. colors.cyan .. "│" .. colors.reset .. content .. string.rep(" ", padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
-    else
-        print("  " .. color .. icon .. " " .. colors.reset .. colors.white .. msg .. colors.reset)
+    local lines = process_text_lines(msg)
+    
+    for i, line in ipairs(lines) do
+        local current_icon = (i == 1) and icon or string.rep(" ", get_visible_len(icon))
+        
+        if M.drawing_box then
+            local width = get_terminal_width()
+            local inner_width = width - 2
+            local content = "  " .. color .. current_icon .. " " .. colors.reset .. colors.white .. utf8_truncate(line, inner_width - 6) .. colors.reset
+            local vis_len = get_visible_len(content)
+            local padding = inner_width - vis_len
+            if padding < 0 then padding = 0 end
+            print(colors.bold .. colors.cyan .. "│" .. colors.reset .. content .. string.rep(" ", padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
+        else
+            print("  " .. color .. current_icon .. " " .. colors.reset .. colors.white .. line .. colors.reset)
+        end
     end
 end
 
@@ -193,12 +224,16 @@ end
 function M.info(msg, label)
     if label then
         -- Backward compatibility for info with labels
-        local pipe_pos = 30
-        local left = "  " .. label
-        local vis_left = get_visible_len(left)
-        local fill = pipe_pos - vis_left
-        if fill < 1 then fill = 1 end
-        print(left .. string.rep(" ", fill) .. colors.gray .. "» " .. colors.reset .. colors.bold .. colors.white .. msg .. colors.reset)
+        local lines = process_text_lines(msg)
+        for i, line in ipairs(lines) do
+            local pipe_pos = 30
+            local current_label = (i == 1) and label or ""
+            local left = "  " .. current_label
+            local vis_left = get_visible_len(left)
+            local fill = pipe_pos - vis_left
+            if fill < 1 then fill = 1 end
+            print(left .. string.rep(" ", fill) .. colors.gray .. "» " .. colors.reset .. colors.bold .. colors.white .. line .. colors.reset)
+        end
     else
         M.alert("info", msg)
     end
@@ -206,22 +241,28 @@ end
 
 function M.text(msg, color)
     local c = color or (colors.bold .. colors.white)
-    if M.drawing_box then
-        local width = get_terminal_width()
-        local inner_width = width - 2
-        local content = "  " .. c .. utf8_truncate(msg, inner_width - 4) .. colors.reset
-        local vis_len = get_visible_len(content)
-        local padding = inner_width - vis_len
-        if padding < 0 then padding = 0 end
-        print(colors.bold .. colors.cyan .. "│" .. colors.reset .. content .. string.rep(" ", padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
-    else
-        print("  " .. c .. msg .. colors.reset)
+    local lines = process_text_lines(msg)
+    for _, line in ipairs(lines) do
+        if M.drawing_box then
+            local width = get_terminal_width()
+            local inner_width = width - 2
+            local content = "  " .. c .. utf8_truncate(line, inner_width - 4) .. colors.reset
+            local vis_len = get_visible_len(content)
+            local padding = inner_width - vis_len
+            if padding < 0 then padding = 0 end
+            print(colors.bold .. colors.cyan .. "│" .. colors.reset .. content .. string.rep(" ", padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
+        else
+            print("  " .. c .. line .. colors.reset)
+        end
     end
 end
 
 function M.line(msg, color)
     local c = color or colors.white
-    print("  " .. c .. msg .. colors.reset)
+    local lines = process_text_lines(msg)
+    for _, line in ipairs(lines) do
+        print("  " .. c .. line .. colors.reset)
+    end
 end
 
 function M.row_simple(label, value)
