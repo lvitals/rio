@@ -333,4 +333,47 @@ function M.rollback()
     return active_adapter.query("ROLLBACK")
 end
 
+-- Transaction management with automatic commit/rollback.
+-- Executes a given function within a database transaction.
+-- If the function succeeds, the transaction is committed.
+-- If the function returns an error or throws an exception, the transaction is rolled back.
+-- Arguments:
+--   callback_fn: The function to execute within the transaction. It will receive additional arguments passed to M.transaction.
+--   ...: Additional arguments to pass to the callback_fn.
+-- Returns:
+--   The result of the callback_fn on success, or nil and an error object on failure.
+function M.transaction(callback_fn, ...)
+    ensure_initialized() -- Ensure the manager is initialized
+
+    -- Start the transaction
+    local ok_begin, err_begin = M.begin()
+    if not ok_begin then
+        return nil, format_error_obj(err_begin) -- Return formatted error
+    end
+
+    -- Execute the callback function within the transaction
+    local ok_call, result_or_err = pcall(callback_fn, ...) -- Pass additional args to callback
+
+    if ok_call then
+        -- If callback succeeded, commit the transaction
+        local ok_commit, err_commit = M.commit()
+        if not ok_commit then
+            -- If commit fails, attempt to rollback and return the commit error
+            local _, _ = M.rollback() -- Attempt rollback, ignore its error for now to prioritize commit error
+            return nil, format_error_obj(err_commit)
+        end
+        -- Return the result of the callback function
+        return result_or_err
+    else
+        -- If callback failed, rollback the transaction
+        local _, err_rollback = M.rollback()
+        if err_rollback then
+            -- Log or format the rollback error if significant, but prioritize the original error from callback
+            print("Warning: Error during transaction rollback: " .. tostring(err_rollback))
+        end
+        -- Return the error from the callback function, wrapped by format_error_obj
+        return nil, format_error_obj(result_or_err)
+    end
+end
+
 return M
