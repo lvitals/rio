@@ -12,34 +12,25 @@ local condition = require("cqueues.condition")
 local db_manager = require("rio.database.manager")
 local ui = require("rio.utils.ui")
 
+local test_config = require("test.test_config")
+
 local NUM_QUERIES = 2000 -- Total queries
 local CONCURRENCY = 50   -- Match the pool size to avoid starvation
 
-local configs = {
-    sqlite = { adapter = "sqlite", database = ":memory:", pool = 50 },
-    postgres = { adapter = "postgres", database = "postgres", username = "postgres", password = "123456", host = "localhost", pool = 50 },
-    mysql = { adapter = "mysql", database = "test", username = "root", password = "123456", host = "127.0.0.1", pool = 50 }
-}
-
 describe("Rio Framework Async Adapters Benchmark", function()
 
-    local function run_benchmark(adapter_name, config, multi_statement)
+    local function run_benchmark(adapter_name, multi_statement)
         local mode_label = multi_statement and "(Multi-Statement)" or "(Single Statement)"
         it("should benchmark " .. adapter_name .. " throughput " .. mode_label, function()
-            local ok, err = pcall(db_manager.initialize, config)
+            -- Unified pre-check with test context
+            if test_config.skip_if_no_db(adapter_name, "Benchmark: " .. adapter_name .. " " .. mode_label) then return end
             
-            -- Perform a ping to verify credentials and network before throwing 2000 concurrent errors
-            local ping_ok, ping_err = pcall(function()
-                return db_manager.query("SELECT 1")
-            end)
-
-            if not ok or not ping_ok or (type(ping_err) == "string" and ping_err:match("error")) or ping_err == nil then
-                ui.box(adapter_name:upper() .. " PERFORMANCE " .. mode_label, function()
-                    ui.status("Status", false, "Skipped (Connection/Auth Failed)")
-                end)
-                pending("Database connection or authentication failed, skipping benchmark")
-                return
-            end
+            local config = test_config.configs[adapter_name]
+            -- Set pool to CONCURRENCY for benchmark
+            config.pool = CONCURRENCY
+            
+            local ok, err = pcall(db_manager.initialize, config)
+            if not ok then error("Driver failed: " .. tostring(err)) end
 
             local cq = cqueues.new()
             local errors = 0
@@ -107,10 +98,10 @@ describe("Rio Framework Async Adapters Benchmark", function()
         end)
     end
 
-    run_benchmark("sqlite", configs.sqlite, false)
-    run_benchmark("postgres", configs.postgres, false)
-    run_benchmark("postgres", configs.postgres, true)
-    run_benchmark("mysql", configs.mysql, false)
-    run_benchmark("mysql", configs.mysql, true)
+    run_benchmark("sqlite", false)
+    run_benchmark("postgres", false)
+    run_benchmark("postgres", true)
+    run_benchmark("mysql", false)
+    run_benchmark("mysql", true)
 
 end)

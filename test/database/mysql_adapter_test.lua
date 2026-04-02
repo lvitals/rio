@@ -8,40 +8,29 @@ end
 
 local mysql = require("rio.database.adapters.mysql")
 local cqueues = require("cqueues")
+local test_config = require("test.test_config")
 
 describe("Rio MySQL Adapter", function()
-    local config = {
-        database = "test",
-        username = "root",
-        password = "123456",
-        host = "127.0.0.1",
-        pool = 5
-    }
-
-    local has_db = false
+    local adapter_name = "mysql"
+    local config = test_config.configs[adapter_name]
 
     setup(function()
-        local ok = pcall(mysql.initialize, config)
-        if ok then
-            local conn = mysql.get_connection()
-            if conn then
-                has_db = true
-                mysql.release_connection(conn)
-                -- Ensure test table exists
-                mysql.query("DROP TABLE IF EXISTS rio_mysql_busted_test")
-                mysql.query("CREATE TABLE rio_mysql_busted_test (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255))")
-            end
+        if test_config.check_connection(adapter_name) then
+            mysql.initialize(config)
+            -- Ensure test table exists
+            mysql.query("DROP TABLE IF EXISTS rio_mysql_busted_test")
+            mysql.query("CREATE TABLE rio_mysql_busted_test (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255))")
         end
     end)
 
     teardown(function()
-        if has_db then
+        if test_config.check_connection(adapter_name) then
             mysql.query("DROP TABLE IF EXISTS rio_mysql_busted_test")
         end
     end)
 
     it("should connect and provide diagnostic info", function()
-        if not has_db then pending("No database connection"); return end
+        if test_config.skip_if_no_db(adapter_name, "MySQL Adapter") then return end
         local conn, env = mysql.get_connection()
         assert.is_not_nil(conn)
         
@@ -55,7 +44,7 @@ describe("Rio MySQL Adapter", function()
     end)
 
     it("should perform basic CRUD operations", function()
-        if not has_db then pending("No database connection"); return end
+        if test_config.skip_if_no_db(adapter_name, "MySQL Adapter") then return end
         -- Insert
         local id1 = mysql.insert("INSERT INTO rio_mysql_busted_test (name) VALUES (?)", {"Alice"})
         local id2 = mysql.insert("INSERT INTO rio_mysql_busted_test (name) VALUES (?)", {"Bob"})
@@ -82,7 +71,7 @@ describe("Rio MySQL Adapter", function()
     end)
 
     it("should support cooperative execution with cqueues", function()
-        if not has_db then pending("No database connection"); return end
+        if test_config.skip_if_no_db(adapter_name, "MySQL Adapter") then return end
         local cq = cqueues.new()
         local results = {}
         local count = 5
@@ -102,14 +91,14 @@ describe("Rio MySQL Adapter", function()
     end)
 
     it("should handle SQL errors gracefully", function()
-        if not has_db then pending("No database connection"); return end
+        if test_config.skip_if_no_db(adapter_name, "MySQL Adapter") then return end
         local res, err = mysql.query("SELECT * FROM non_existent_table_mysql")
         assert.is_nil(res)
         assert.is_string(err)
     end)
     
     it("should escape values correctly", function()
-        if not has_db then pending("No database connection"); return end
+        if test_config.skip_if_no_db(adapter_name, "MySQL Adapter") then return end
         assert.equals("'O''Reilly'", mysql.escape_value("O'Reilly"))
         assert.equals("1", mysql.escape_value(true))
         assert.equals("0", mysql.escape_value(false))

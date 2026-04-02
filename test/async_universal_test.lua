@@ -1,17 +1,15 @@
 require "test.spec_helper"
 local manager = require("rio.database.manager")
+local test_config = require("test.test_config")
 
 describe("Rio Framework - Unified Async Database API", function()
     
-    local function test_async_query(adapter_name, config)
+    local function test_async_query(adapter_name)
         it("should execute async queries successfully via " .. adapter_name .. " adapter", function()
-            -- Initialize adapter
-            local ok, err = pcall(manager.initialize, config)
-            if not ok then pending("Skipping " .. adapter_name .. ": No connection"); return end
-            
-            local conn = manager.get_connection()
-            if not conn then pending("Skipping " .. adapter_name .. ": No connection"); return end
-            manager.release_connection(conn)
+            -- Initialize adapter using centralized config with context
+            if test_config.skip_if_no_db(adapter_name, "Unified Async: " .. adapter_name) then return end
+            local config = test_config.configs[adapter_name]
+            manager.initialize(config)
 
             -- Determine SQL based on database type for sleep simulation
             local sql = "SELECT 'Async OK' as msg"
@@ -39,33 +37,17 @@ describe("Rio Framework - Unified Async Database API", function()
 
     -- 1. SQLite3 (Non-blocking FD simulation)
     describe("SQLite3 Adapter", function()
-        test_async_query("sqlite", {
-            adapter = "sqlite",
-            database = ":memory:"
-        })
+        test_async_query("sqlite")
     end)
 
     -- 2. PostgreSQL (Native non-blocking)
-    -- We use pcall to skip if the DB is not reachable in the CI/Local env
     describe("PostgreSQL Adapter", function()
-        test_async_query("postgres", {
-            adapter = "postgres",
-            database = "postgres",
-            username = "postgres",
-            password = "123456",
-            host = "localhost"
-        })
+        test_async_query("postgres")
     end)
 
     -- 3. MySQL/MariaDB (Native non-blocking)
     describe("MySQL Adapter", function()
-        test_async_query("mysql", {
-            adapter = "mysql",
-            database = "test",
-            username = "root",
-            password = "123456",
-            host = "127.0.0.1"
-        })
+        test_async_query("mysql")
     end)
 
 end)

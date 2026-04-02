@@ -8,32 +8,20 @@ end
 
 local cqueues = require("cqueues")
 local postgres = require("rio.database.adapters.postgres")
+local test_config = require("test.test_config")
 
 describe("Rio PostgreSQL Cooperative Concurrency", function()
-    local config = {
-        database = "postgres",
-        username = "postgres",
-        password = "123456",
-        host = "127.0.0.1",
-        port = 5432,
-        pool = 20
-    }
-
-    local has_db = false
+    local adapter_name = "postgres"
+    local config = test_config.configs[adapter_name]
 
     setup(function()
-        local ok = pcall(postgres.initialize, config)
-        if ok then
-            local conn = postgres.get_connection()
-            if conn then
-                has_db = true
-                postgres.release_connection(conn)
-            end
+        if test_config.check_connection(adapter_name) then
+            postgres.initialize(config)
         end
     end)
 
     it("should handle 10 parallel 1-second queries in ~1 second total", function()
-        if not has_db then pending("No database connection"); return end
+        if test_config.skip_if_no_db(adapter_name, "PostgreSQL Cooperative") then return end
         local cq = cqueues.new()
         local num_queries = 10
         local completed = 0

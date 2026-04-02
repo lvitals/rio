@@ -188,9 +188,9 @@ function M.status(label, success, details)
     end
 
     local icon = success and (colors.green .. "✓ PASS") or (colors.red .. "✗ FAIL")
-    -- Unify pipe position with M.row for consistency inside boxes
-    local pipe_pos = math.floor(inner_width * 0.45)
-    local max_label_len = pipe_pos - 12 -- Adjusted for icon length
+    -- Increase pipe_pos to 55% for more label space
+    local pipe_pos = math.floor(inner_width * 0.55)
+    local max_label_len = pipe_pos - 10
     
     local display_label = utf8_truncate(label, max_label_len)
     local left_part = "  " .. icon .. " " .. colors.white .. display_label
@@ -226,8 +226,8 @@ function M.row(label, value)
         print("\n" .. colors.bold .. colors.cyan .. "╭" .. string.rep("─", inner_width) .. "╮" .. colors.reset)
     end
 
-    -- Proportional pipe position unified with M.status
-    local pipe_pos = math.floor(inner_width * 0.45)
+    -- Proportional pipe position unified with M.status at 55%
+    local pipe_pos = math.floor(inner_width * 0.55)
     local max_label_len = pipe_pos - 4
     
     local display_label = utf8_truncate(label, max_label_len)

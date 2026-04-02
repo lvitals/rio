@@ -8,26 +8,22 @@ local ui = require("rio.utils.ui")
 local colors = require("rio.utils.compat").colors
 local etl = require("rio.utils.etl")
 
+local test_config = require("test.test_config")
+
 local User = Model:extend({
     table_name = "users",
     fillable = {"name", "email"}
 })
 
-local configs = {
-    sqlite = { adapter = "sqlite", database = "test_full_async.db", pool = 5 },
-    mysql = { adapter = "mysql", database = "test", username = "root", password = "123456", host = "127.0.0.1", pool = 5 },
-    postgres = { adapter = "postgres", database = "postgres", username = "postgres", password = "postgres", host = "127.0.0.1", pool = 5 }
-}
-
 describe("Rio Framework Full Async API Suite", function()
-    local function run_db_suite(adapter_name, config)
+    local function run_db_suite(adapter_name)
         it("should successfully execute full async suite for " .. adapter_name, function()
-            local ok, err = pcall(manager.initialize, config)
-            if not ok then pending("Skipping " .. adapter_name:upper() .. ": Driver failed.") return end
+            -- Automated connectivity check and skip with context
+            if test_config.skip_if_no_db(adapter_name, "Async Suite: " .. adapter_name) then return end
             
-            local conn, c_err = manager.get_connection()
-            if not conn then pending("Skipping " .. adapter_name:upper() .. ": No connection.") return end
-            manager.release_connection(conn)
+            local config = test_config.configs[adapter_name]
+            local ok, err = pcall(manager.initialize, config)
+            if not ok then error("Driver failed for " .. adapter_name .. ": " .. tostring(err)) end
 
             local adapter = manager.get_adapter()
             local pk_def = adapter.get_pk_definition()
@@ -103,7 +99,7 @@ describe("Rio Framework Full Async API Suite", function()
         end)
     end
 
-    run_db_suite("sqlite", configs.sqlite)
-    run_db_suite("mysql", configs.mysql)
-    run_db_suite("postgres", configs.postgres)
+    run_db_suite("sqlite")
+    run_db_suite("mysql")
+    run_db_suite("postgres")
 end)

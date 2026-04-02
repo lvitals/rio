@@ -8,38 +8,28 @@ end
 
 local cqueues = require("cqueues")
 local mysql = require("rio.database.adapters.mysql")
+local test_config = require("test.test_config")
 
 describe("Rio MySQL/MariaDB Cooperative Concurrency", function()
-    local config = {
-        database = "test",
-        username = "root",
-        password = "123456",
-        host = "127.0.0.1",
-        pool = 10
-    }
-
-    local has_db = false
+    local adapter_name = "mysql"
+    local config = test_config.configs[adapter_name]
 
     setup(function()
-        local ok = pcall(mysql.initialize, config)
-        if ok then
-            local conn = mysql.get_connection()
-            if conn then
-                has_db = true
-                mysql.release_connection(conn)
-                mysql.query("CREATE TABLE IF NOT EXISTS rio_mysql_coop_test (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255))")
-            end
+        if test_config.check_connection(adapter_name) then
+            mysql.initialize(config)
+            -- Ensure test table exists
+            mysql.query("CREATE TABLE IF NOT EXISTS rio_mysql_coop_test (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255))")
         end
     end)
 
     teardown(function()
-        if has_db then
+        if test_config.check_connection(adapter_name) then
             mysql.query("DROP TABLE IF EXISTS rio_mysql_coop_test")
         end
     end)
 
     it("should handle 20 concurrent operations without blocking", function()
-        if not has_db then pending("No database connection"); return end
+        if test_config.skip_if_no_db(adapter_name, "MySQL Cooperative") then return end
         local cq = cqueues.new()
         local num_queries = 20
         local completed = 0
@@ -60,7 +50,7 @@ describe("Rio MySQL/MariaDB Cooperative Concurrency", function()
     end)
     
     it("should complete multiple queries without crashing despite sequential execution", function()
-        if not has_db then pending("No database connection"); return end
+        if test_config.skip_if_no_db(adapter_name, "MySQL Cooperative") then return end
         local cq = cqueues.new()
         local num_workers = 5
         local finished_workers = 0
