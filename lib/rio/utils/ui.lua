@@ -25,22 +25,36 @@ local alerts = {
 -- Private Helpers
 local function get_visible_len(s)
     if not s then return 0 end
-    local stripped = tostring(s):gsub("\27%[[%d;]*m", "")
-    if not utf8 then return #stripped end
-    local ok, len = pcall(utf8.len, stripped)
-    return (ok and len) or #stripped
+    -- Remove ALL ANSI escape codes (colors, bold, etc.)
+    -- Using a more comprehensive pattern
+    local stripped = tostring(s):gsub("\27%[[%d;?]*[mKhlABCDEFGJKST]", "")
+    
+    if utf8 then
+        local ok, len = pcall(utf8.len, stripped)
+        if ok and len then return len end
+    end
+    
+    -- Fallback: Count UTF-8 characters manually if library is missing
+    local _, count = stripped:gsub("[%z\1-\127\194-\244][\128-\191]*", "")
+    return count
 end
 
 local function utf8_truncate(s, max_len)
-    if get_visible_len(s) <= max_len then return s end
-    if not utf8 then return tostring(s):sub(1, max_len - 3) .. "..." end
+    local vis_len = get_visible_len(s)
+    if vis_len <= max_len then return s end
+    
+    if not utf8 then
+        return tostring(s):sub(1, max_len - 3) .. "..."
+    end
+
     local res = ""
     local count = 0
     for _, c in utf8.codes(tostring(s)) do
         local char = utf8.char(c)
-        if count + 1 > max_len - 3 then break end
+        local char_vis = get_visible_len(char)
+        if count + char_vis > max_len - 3 then break end
         res = res .. char
-        count = count + 1
+        count = count + char_vis
     end
     return res .. "..."
 end
@@ -48,15 +62,16 @@ end
 local function get_terminal_width()
     local default = 80
     local f = io.popen("tput cols 2>/dev/null")
+    local cols
     if f then
         local res = f:read("*a")
         f:close()
-        local cols = tonumber(res:match("%d+"))
-        if cols then 
-            return math.max(40, math.min(80, cols - 2)) 
-        end
+        cols = tonumber(res:match("%d+"))
     end
-    return default
+    
+    cols = cols or default
+    -- Use 80 as maximum, but stay within terminal bounds
+    return math.max(40, math.min(80, cols))
 end
 
 local function process_text_lines(text)
@@ -122,18 +137,31 @@ function M.alert(kind, msg)
     local color = style.color
     
     local lines = process_text_lines(msg)
+    local width = get_terminal_width()
+    local inner_width = width - 2
     
     for i, line in ipairs(lines) do
-        local current_icon = (i == 1) and icon or string.rep(" ", get_visible_len(icon))
+        local current_icon = (i == 1) and icon or " "
+        local icon_vis_len = get_visible_len(current_icon)
+        
+        -- Construction: "  " (2) + icon + " " (1) + truncated_line
+        local prefix = "  " .. current_icon .. " "
+        local prefix_len = 2 + icon_vis_len + 1
+        local max_line_len = inner_width - prefix_len
+        
+        local display_line = utf8_truncate(line, max_line_len)
+        local line_vis_len = get_visible_len(display_line)
         
         if M.drawing_box then
-            local width = get_terminal_width()
-            local inner_width = width - 2
-            local content = "  " .. color .. current_icon .. " " .. colors.reset .. colors.white .. utf8_truncate(line, inner_width - 6) .. colors.reset
-            local vis_len = get_visible_len(content)
-            local padding = inner_width - vis_len
+            local total_vis = prefix_len + line_vis_len
+            local padding = inner_width - total_vis
             if padding < 0 then padding = 0 end
-            print(colors.bold .. colors.cyan .. "│" .. colors.reset .. content .. string.rep(" ", padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
+            
+            -- Print with colors but use calculated padding
+            io.write(colors.bold .. colors.cyan .. "│" .. colors.reset)
+            io.write("  " .. color .. current_icon .. " " .. colors.reset .. colors.white .. display_line .. colors.reset)
+            io.write(string.rep(" ", padding))
+            io.write(colors.bold .. colors.cyan .. "│" .. colors.reset .. "\n")
         else
             print("  " .. color .. current_icon .. " " .. colors.reset .. colors.white .. line .. colors.reset)
         end
@@ -160,8 +188,9 @@ function M.status(label, success, details)
     end
 
     local icon = success and (colors.green .. "✓ PASS") or (colors.red .. "✗ FAIL")
-    local pipe_pos = math.floor(inner_width * 0.55)
-    local max_label_len = pipe_pos - 10
+    -- Unify pipe position with M.row for consistency inside boxes
+    local pipe_pos = math.floor(inner_width * 0.45)
+    local max_label_len = pipe_pos - 12 -- Adjusted for icon length
     
     local display_label = utf8_truncate(label, max_label_len)
     local left_part = "  " .. icon .. " " .. colors.white .. display_label
@@ -197,11 +226,14 @@ function M.row(label, value)
         print("\n" .. colors.bold .. colors.cyan .. "╭" .. string.rep("─", inner_width) .. "╮" .. colors.reset)
     end
 
-    local left_part = "  " .. colors.white .. label
+    -- Proportional pipe position unified with M.status
+    local pipe_pos = math.floor(inner_width * 0.45)
+    local max_label_len = pipe_pos - 4
+    
+    local display_label = utf8_truncate(label, max_label_len)
+    local left_part = "  " .. colors.white .. display_label
     local vis_left = get_visible_len(left_part)
     
-    -- Proportional pipe position
-    local pipe_pos = math.floor(inner_width * 0.45)
     local fill = pipe_pos - vis_left
     if fill < 1 then fill = 1 end
     
