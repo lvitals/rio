@@ -1,8 +1,8 @@
 package = "rio"
-version = "0.1.15-1"
+version = "0.1.16-1"
 source = {
    url = "git://github.com/lvitals/rio",
-   tag = "v0.1.15"
+   tag = "v0.1.16"
 }
 
 description = {
@@ -69,7 +69,8 @@ build = {
       ["rio.utils.path"] = "lib/rio/utils/path.lua",
       ["rio.utils.string"] = "lib/rio/utils/string.lua",
       ["rio.utils.tests"] = "lib/rio/utils/tests.lua",
-      ["rio.utils.compat"] = "lib/rio/utils/compat.lua"
+      ["rio.utils.compat"] = "lib/rio/utils/compat.lua",
+      ["rio.utils.ui"] = "lib/rio/utils/ui.lua"
    },
    install = {
       bin = {

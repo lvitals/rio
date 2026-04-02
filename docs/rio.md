@@ -150,14 +150,22 @@ Generators create boilerplate code, while destructors remove it.
 **generate scaffold** *Name* \[*fields*]
 
 > Creates a full CRUD (Model, Migration, Controller, Views, Tests, and Routes).
+> Supports namespaces using
+> *::*
+> (e.g.,
+> *Admin::Post*).
+> Controllers and views will be organized into subdirectories.
 
 **generate resource** *Name* \[*fields*]
 
-> Creates a scaffold without the Views.
+> Creates a scaffold without the Views. Supports namespaces.
 
 **generate** | **destroy model** *Name* \[*fields*]
 
 > Creates or removes a Model and its corresponding Migration.
+> Models are created in the flat
+> *app/models/*
+> directory.
 
 **generate** | **destroy migration** *Name* \[*fields*]
 
@@ -165,7 +173,7 @@ Generators create boilerplate code, while destructors remove it.
 
 **generate** | **destroy controller** *Name* \[*actions*]
 
-> Creates or removes a Controller and its corresponding Tests.
+> Creates or removes a Controller and its corresponding Tests. Supports namespaces.
 
 **generate channel** *Name*
 
@@ -212,7 +220,7 @@ manage the database schema and lifecycle.
 
 **db:system:change** **--to=** *adapter*
 
-> Changes the database adapter in config/database.lua.
+> Interactively changes the database adapter in config/database.lua.
 
 # MAINTENANCE AND MAILBOX
 
@@ -256,9 +264,60 @@ manage the database schema and lifecycle.
 
 > Relay an inbound email from a provider (postfix, exim, qmail) to Rio.
 
+# ROUTING
+
+Routes are defined in
+*config/routes.lua*.
+
+## Basic Methods
+
+**app:get(path, handler)**
+
+**app:post(path, handler)**
+
+**app:put(path, handler)**
+
+**app:patch(path, handler)**
+
+**app:delete(path, handler)**
+
+**app:ws(path, channel)**
+
+## Grouping and Resources
+
+**app:group(prefix, function(app) ... end)**
+
+> Nests routes under a common URI prefix.
+
+**app:resources(name, \[controller])**
+
+> Generates RESTful routes for a resource (index, show, new, edit, create, update, destroy).
+
 # ACTIVE RECORD ORM
 
 The Rio ORM manages complex relationships and database persistence.
+
+## Configuration
+
+**table\_name**
+
+> Explicitly set the database table name.
+
+**primary\_key**
+
+> Set the primary key (default: "id").
+
+**timestamps**
+
+> Enable/disable created\_at and updated\_at (default: true).
+
+**soft\_deletes**
+
+> When true, records are marked as deleted instead of being removed.
+
+**per\_page**
+
+> Default records per page for pagination (default: 5).
 
 ## Relationships
 
@@ -283,6 +342,21 @@ The Rio ORM manages complex relationships and database persistence.
 The
 *dependent = destroy*
 option ensures that child records are deleted when the parent is removed.
+
+## Hooks and Transactions
+
+**before\_save**, **before\_create**, **before\_update**
+
+> Callback functions called during the record lifecycle.
+
+**Model.transaction(cb)**
+
+> Executes a callback within a database transaction.
+
+## Validations
+
+Supported rules:
+*presence*, *uniqueness*, *format*, *length*, *numericality*.
 
 # SECURITY AND AUTHENTICATION
 
@@ -405,4 +479,4 @@ The Rio Framework Team.
 
 Report bugs at the official repository.
 
-Linux 6.18.13-arch1-1 - March 5, 2026
+Linux 6.19.9-arch1-1 - April 2, 2026

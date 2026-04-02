@@ -163,16 +163,19 @@
     scaffold</code></a> <var class="Ar">Name</var>
     [<var class="Ar">fields</var>]</dt>
   <dd>Creates a full CRUD (Model, Migration, Controller, Views, Tests, and
-      Routes).</dd>
+      Routes). Supports namespaces using <var class="Ar">::</var> (e.g.,
+      <var class="Ar">Admin::Post</var>). Controllers and views will be
+      organized into subdirectories.</dd>
   <dt id="generate~2"><a class="permalink" href="#generate~2"><code class="Cm">generate
     resource</code></a> <var class="Ar">Name</var>
     [<var class="Ar">fields</var>]</dt>
-  <dd>Creates a scaffold without the Views.</dd>
+  <dd>Creates a scaffold without the Views. Supports namespaces.</dd>
   <dt id="generate~3"><a class="permalink" href="#generate~3"><code class="Cm">generate</code></a>
     | <a class="permalink" href="#destroy"><code class="Cm" id="destroy">destroy
     model</code></a> <var class="Ar">Name</var>
     [<var class="Ar">fields</var>]</dt>
-  <dd>Creates or removes a Model and its corresponding Migration.</dd>
+  <dd>Creates or removes a Model and its corresponding Migration. Models are
+      created in the flat <span class="Pa">app/models/</span> directory.</dd>
   <dt id="generate~4"><a class="permalink" href="#generate~4"><code class="Cm">generate</code></a>
     |
     <a class="permalink" href="#destroy~2"><code class="Cm" id="destroy~2">destroy
@@ -184,7 +187,8 @@
     <a class="permalink" href="#destroy~3"><code class="Cm" id="destroy~3">destroy
     controller</code></a> <var class="Ar">Name</var>
     [<var class="Ar">actions</var>]</dt>
-  <dd>Creates or removes a Controller and its corresponding Tests.</dd>
+  <dd>Creates or removes a Controller and its corresponding Tests. Supports
+      namespaces.</dd>
   <dt id="generate~6"><a class="permalink" href="#generate~6"><code class="Cm">generate
     channel</code></a> <var class="Ar">Name</var></dt>
   <dd>Creates a WebSocket channel and adds its route.</dd>
@@ -223,7 +227,7 @@
   <dd>Clears database metadata and logical caches.</dd>
   <dt id="db:system:change"><a class="permalink" href="#db:system:change"><code class="Cm">db:system:change</code></a>
     <code class="Fl">--to=</code> <var class="Ar">adapter</var></dt>
-  <dd>Changes the database adapter in config/database.lua.</dd>
+  <dd>Interactively changes the database adapter in config/database.lua.</dd>
 </dl>
 </section>
 <section class="Sh">
@@ -261,10 +265,67 @@
 </dl>
 </section>
 <section class="Sh">
+<h1 class="Sh" id="ROUTING"><a class="permalink" href="#ROUTING">ROUTING</a></h1>
+<p class="Pp">Routes are defined in
+  <span class="Pa">config/routes.lua</span>.</p>
+<section class="Ss">
+<h2 class="Ss" id="Basic_Methods"><a class="permalink" href="#Basic_Methods">Basic
+  Methods</a></h2>
+<dl class="Bl-tag">
+  <dt id="app:get(path,"><a class="permalink" href="#app:get(path,"><code class="Cm">app:get(path,
+    handler)</code></a></dt>
+  <dd style="width: auto;">&#x00A0;</dd>
+  <dt id="app:post(path,"><a class="permalink" href="#app:post(path,"><code class="Cm">app:post(path,
+    handler)</code></a></dt>
+  <dd style="width: auto;">&#x00A0;</dd>
+  <dt id="app:put(path,"><a class="permalink" href="#app:put(path,"><code class="Cm">app:put(path,
+    handler)</code></a></dt>
+  <dd style="width: auto;">&#x00A0;</dd>
+  <dt id="app:patch(path,"><a class="permalink" href="#app:patch(path,"><code class="Cm">app:patch(path,
+    handler)</code></a></dt>
+  <dd style="width: auto;">&#x00A0;</dd>
+  <dt id="app:delete(path,"><a class="permalink" href="#app:delete(path,"><code class="Cm">app:delete(path,
+    handler)</code></a></dt>
+  <dd style="width: auto;">&#x00A0;</dd>
+  <dt id="app:ws(path,"><a class="permalink" href="#app:ws(path,"><code class="Cm">app:ws(path,
+    channel)</code></a></dt>
+  <dd style="width: auto;">&#x00A0;</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Grouping_and_Resources"><a class="permalink" href="#Grouping_and_Resources">Grouping
+  and Resources</a></h2>
+<dl class="Bl-tag">
+  <dt id="app:group(prefix,"><a class="permalink" href="#app:group(prefix,"><code class="Cm">app:group(prefix,
+    function(app) ... end)</code></a></dt>
+  <dd>Nests routes under a common URI prefix.</dd>
+  <dt id="app:resources(name,"><a class="permalink" href="#app:resources(name,"><code class="Cm">app:resources(name,
+    [controller])</code></a></dt>
+  <dd>Generates RESTful routes for a resource (index, show, new, edit, create,
+      update, destroy).</dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
 <h1 class="Sh" id="ACTIVE_RECORD_ORM"><a class="permalink" href="#ACTIVE_RECORD_ORM">ACTIVE
   RECORD ORM</a></h1>
 <p class="Pp">The Rio ORM manages complex relationships and database
     persistence.</p>
+<section class="Ss">
+<h2 class="Ss" id="Configuration"><a class="permalink" href="#Configuration">Configuration</a></h2>
+<dl class="Bl-tag">
+  <dt id="table_name"><a class="permalink" href="#table_name"><b class="Sy">table_name</b></a></dt>
+  <dd>Explicitly set the database table name.</dd>
+  <dt id="primary_key"><a class="permalink" href="#primary_key"><b class="Sy">primary_key</b></a></dt>
+  <dd>Set the primary key (default: &quot;id&quot;).</dd>
+  <dt id="timestamps"><a class="permalink" href="#timestamps"><b class="Sy">timestamps</b></a></dt>
+  <dd>Enable/disable created_at and updated_at (default: true).</dd>
+  <dt id="soft_deletes"><a class="permalink" href="#soft_deletes"><b class="Sy">soft_deletes</b></a></dt>
+  <dd>When true, records are marked as deleted instead of being removed.</dd>
+  <dt id="per_page"><a class="permalink" href="#per_page"><b class="Sy">per_page</b></a></dt>
+  <dd>Default records per page for pagination (default: 5).</dd>
+</dl>
+</section>
 <section class="Ss">
 <h2 class="Ss" id="Relationships"><a class="permalink" href="#Relationships">Relationships</a></h2>
 <dl class="Bl-tag">
@@ -284,6 +345,24 @@
   Deletion</a></h2>
 <p class="Pp">The <var class="Ar">dependent = destroy</var> option ensures that
     child records are deleted when the parent is removed.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Hooks_and_Transactions"><a class="permalink" href="#Hooks_and_Transactions">Hooks
+  and Transactions</a></h2>
+<dl class="Bl-tag">
+  <dt id="before_save"><a class="permalink" href="#before_save"><b class="Sy">before_save</b></a>,
+    <a class="permalink" href="#before_create"><b class="Sy" id="before_create">before_create</b></a>,
+    <a class="permalink" href="#before_update"><b class="Sy" id="before_update">before_update</b></a></dt>
+  <dd>Callback functions called during the record lifecycle.</dd>
+  <dt id="Model.transaction(cb)"><a class="permalink" href="#Model.transaction(cb)"><code class="Cm">Model.transaction(cb)</code></a></dt>
+  <dd>Executes a callback within a database transaction.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Validations"><a class="permalink" href="#Validations">Validations</a></h2>
+<p class="Pp">Supported rules: <var class="Ar">presence</var>,
+    <var class="Ar">uniqueness</var>, <var class="Ar">format</var>,
+    <var class="Ar">length</var>, <var class="Ar">numericality</var>.</p>
 </section>
 </section>
 <section class="Sh">
@@ -399,8 +478,8 @@
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">March 5, 2026</td>
-    <td class="foot-os">Linux 6.18.13-arch1-1</td>
+    <td class="foot-date">April 2, 2026</td>
+    <td class="foot-os">Linux 6.19.9-arch1-1</td>
   </tr>
 </table>
 </body>
