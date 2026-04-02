@@ -30,13 +30,15 @@ end
 function M.is_safe(s)
     if type(s) ~= "string" then return false end
     -- Rejects control characters except \t, \r, \n
-    return not s:find("[\0-\8\11-\12\14-\31\127]")
+    -- Using %z instead of \0 for null byte in patterns.
+    return not s:find("[%z-\8\11-\12\14-\31\127]")
 end
 
 -- Sanitizes string by removing dangerous characters
 function M.sanitize(s)
     if type(s) ~= "string" then return "" end
-    return s:gsub("[\0-\8\11-\12\14-\31\127]", "")
+    -- Using %z instead of \0 for null byte in patterns.
+    return s:gsub("[%z-\8\11-\12\14-\31\127]", "")
 end
 
 -- Limits string size (DoS protection)

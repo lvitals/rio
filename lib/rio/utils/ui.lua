@@ -6,6 +6,7 @@ local M = {}
 -- Professional UI Utilities for the Rio Framework CLI
 local compat = require("rio.utils.compat")
 local colors = compat.colors
+local utf8 = compat.utf8
 
 M.colors = colors
 
@@ -25,12 +26,14 @@ local alerts = {
 local function get_visible_len(s)
     if not s then return 0 end
     local stripped = tostring(s):gsub("\27%[[%d;]*m", "")
+    if not utf8 then return #stripped end
     local ok, len = pcall(utf8.len, stripped)
     return (ok and len) or #stripped
 end
 
 local function utf8_truncate(s, max_len)
     if get_visible_len(s) <= max_len then return s end
+    if not utf8 then return tostring(s):sub(1, max_len - 3) .. "..." end
     local res = ""
     local count = 0
     for _, c in utf8.codes(tostring(s)) do

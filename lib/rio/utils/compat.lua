@@ -74,7 +74,12 @@ M.unpack = table.unpack or unpack
 -- load / loadstring
 M.load = function(chunk, chunkname, mode, env)
     if M.lua_version <= 5.1 then
-        local f, err = loadstring(chunk, chunkname)
+        local f, err
+        if type(chunk) == "string" then
+            f, err = loadstring(chunk, chunkname)
+        else
+            f, err = load(chunk, chunkname)
+        end
         if f and env then setfenv(f, env) end
         return f, err
     else
@@ -84,6 +89,9 @@ M.load = function(chunk, chunkname, mode, env)
         return load(chunk, chunkname, mode, env or _G)
     end
 end
+
+-- utf8 module (fallback for Lua < 5.3)
+M.utf8 = utf8 or (pcall(require, "utf8") and require("utf8")) or nil
 
 -- Bitwise operations
 local bit = nil

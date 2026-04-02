@@ -17,7 +17,8 @@ end
 function M.is_safe_value(value)
     if type(value) ~= "string" then return false end
     -- Rejects CRLF and null bytes, which can be used in header injection attacks.
-    return not value:find("[\r\n\0]")
+    -- Using %z as it is the standard Lua pattern for the null byte.
+    return not value:find("[\r\n%z]")
 end
 
 -- Sets standard security headers on a headers object.
