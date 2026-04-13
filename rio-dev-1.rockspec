@@ -25,7 +25,20 @@ dependencies = {
    "busted",
    "linenoise"
 }
-
+external_dependencies = {
+   OPENSSL = {
+      header = "openssl/evp.h"
+   },
+   SQLITE = {
+      header = "sqlite3.h"
+   },
+   MYSQL = {
+      header = "mysql/mysql.h"
+   },
+   POSTGRESQL = {
+      header = "postgresql/libpq-fe.h"
+   }
+}
 build = {
    type = "builtin",
    modules = {

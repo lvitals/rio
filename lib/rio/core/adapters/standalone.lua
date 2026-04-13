@@ -29,7 +29,10 @@ function M:write_headers(headers, end_stream) return self.stream:write_headers(h
 function M:write_body(body) return self.stream:write_body_from_string(body) end
 
 function M:websocket_upgrade(handler, ctx)
-    local websocket = require("http.websocket")
+    local ok_ws, websocket = pcall(require, "http.websocket")
+    if not ok_ws then
+        error("WebSocket support requires the 'lua-http' package. Please install it: luarocks install http")
+    end
     local ws = websocket.new_from_stream(self.stream, self.headers_obj)
     
     local ok, err = ws:accept()

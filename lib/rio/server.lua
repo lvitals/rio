@@ -214,6 +214,12 @@ function Server:listen(port, host)
     ui.header("Rio Framework")
     ui.row_simple("Environment", env)
     ui.row_simple("Listening", string.format("http://%s:%d", h, p))
+    
+    if compat.http_server_is_fallback then
+        ui.warn("Using fallback server (WebSockets not supported)")
+        ui.info("Install 'lua-http' for full WebSocket support: luarocks install http")
+    end
+
     ui.info("Press Ctrl+C to stop the server")
 
     self.server_inst = inst

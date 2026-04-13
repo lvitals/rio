@@ -23,7 +23,27 @@ sudo apt-get install lua5.4 luarocks build-essential libsqlite3-dev libmysqlclie
 ### On Arch Linux:
 ```bash
 sudo pacman -Syu
-sudo pacman -S lua luarocks base-devel sqlite mariadb-libs postgresql-libs
+sudo pacman -S lua luarocks base-devel m4 openssl pkgconf sqlite mariadb-libs postgresql-libs
+```
+
+## Troubleshooting Build Issues
+
+If you encounter errors during installation, especially when installing dependencies like `cqueues` or `luaossl`, it is often due to missing native build tools or libraries.
+
+### "m4: command not found"
+This happens during the installation of `cqueues`. Install `m4`:
+- **Ubuntu/Debian:** `sudo apt-get install m4`
+- **Arch Linux:** `sudo pacman -S m4`
+
+### "openssl/evp.h: No such file or directory"
+This happens during the installation of `luaossl` or `luasec`. Install OpenSSL development headers:
+- **Ubuntu/Debian:** `sudo apt-get install libssl-dev`
+- **Arch Linux:** `sudo pacman -S openssl`
+
+### "Database driver installation fails"
+If `luasql-mysql` or `luasql-postgres` fail to install, ensure you have the correct client libraries installed (see Prerequisites). For MySQL on some systems, you might need to specify the include and library paths:
+```bash
+luarocks install luasql-mysql MYSQL_INCDIR=/usr/include/mysql MYSQL_LIBDIR=/usr/lib
 ```
 
 ## Install Rio Framework

@@ -292,7 +292,9 @@ M.new_headers = create_header_obj
 local http_ok, http_server = pcall(require, "http.server")
 if http_ok then
     M.http_server = http_server
+    M.http_server_is_fallback = false
 else
+    M.http_server_is_fallback = true
     M.http_server = {
         listen = function(options)
             local socket = require("socket")
