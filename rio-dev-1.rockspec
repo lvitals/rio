@@ -11,7 +11,7 @@ description = {
 }
 
 dependencies = {
-   "lua >= 5.1",
+   "lua >= 5.1, < 5.5",
    "http ~> 0.4",
    "luasocket",
    "luaposix",
@@ -33,10 +33,10 @@ external_dependencies = {
       header = "sqlite3.h"
    },
    MYSQL = {
-      header = "mysql/mysql.h"
+      header = "mysql.h"
    },
    POSTGRESQL = {
-      header = "postgresql/libpq-fe.h"
+      header = "libpq-fe.h"
    }
 }
 build = {
