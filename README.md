@@ -44,6 +44,35 @@ rio server
 ```
 Your application will be running at `http://localhost:8080`.
 
+## Local Development
+
+If you are developing the Rio framework itself or want to install it from a local clone, follow these instructions:
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/lvitals/rio.git
+cd rio
+```
+
+### 2. Install dependencies & framework locally
+On architectures like **Arch Linux**, you must explicitly provide the MySQL include directory:
+```bash
+luarocks install rio-dev-1.rockspec --local MYSQL_INCDIR=/usr/include/mysql
+```
+
+For other systems (e.g., Ubuntu/Debian), installing from the local rockspec usually works out of the box:
+```bash
+luarocks install rio-dev-1.rockspec --local
+```
+
+### 3. Running Tests
+You can run the full test suite locally by executing:
+```bash
+chmod +x test/run_tests.sh
+./test/run_tests.sh
+```
+This script will automatically configure the correct environment variables and run all test specifications using Busted.
+
 ## Documentation
 
 For detailed information on how to use Rio, please refer to the following resources:
