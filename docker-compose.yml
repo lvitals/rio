@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: docker.io/library/postgres:alpine
+    container_name: rio-test-postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+
+  mysql:
+    image: docker.io/library/mariadb:latest
+    container_name: rio-test-mysql
+    environment:
+      MYSQL_DATABASE: test
+      MYSQL_ROOT_PASSWORD: 123456
+    ports:
+      - "3306:3306"

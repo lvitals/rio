@@ -161,49 +161,52 @@ function BaseAdapter:execute_async(sql, bindings)
         
     else
         -- MySQL and SQLite behavior
-        local r, e = conn:get_result()
-        if e then final_err = e end
-        
-        if r then
-            if type(r) == "userdata" then
-                local is_mysql = (self.get_driver_name and self:get_driver_name() == "mysql")
-                while true do
-                    local res = {}
-                    if is_mysql and r.numrows then
-                        local total = r:numrows()
-                        for i = 1, total do
-                            local row = r:fetch({}, "a")
-                            if row then
-                                local r_row = {}
-                                for k, v in pairs(row) do r_row[k] = v end
-                                table.insert(res, r_row)
-                            end
-                        end
-                    else
-                        local row = r:fetch({}, "a")
-                        while row do
-                            local r_row = {}
-                            for k, v in pairs(row) do r_row[k] = v end
-                            table.insert(res, r_row)
-                            row = r:fetch({}, "a")
-                        end
-                    end
-                    table.insert(parsed_results, res)
-                    
-                    if is_mysql and r.hasnextresult and r:hasnextresult() then
-                        local has_next, next_err_code, next_err_msg = r:nextresult()
-                        if not has_next then
-                            if next_err_msg then final_err = next_err_msg end
-                            break
-                        end
-                    else
-                        -- Safely close if we are done or if the driver already auto-closed it
-                        pcall(function() if r.close then r:close() end end)
-                        break
-                    end
+        local is_mysql = (self.get_driver_name and self:get_driver_name() == "mysql")
+        if is_mysql then
+            while true do
+                local r, e = conn:get_result()
+                if e then
+                    final_err = e
+                    break
                 end
-            else
-                table.insert(parsed_results, { affected = r })
+                if r == nil then break end
+                
+                if type(r) == "userdata" then
+                    local res = {}
+                    local row = r:fetch({}, "a")
+                    while row do
+                        local r_row = {}
+                        for k, v in pairs(row) do r_row[k] = v end
+                        table.insert(res, r_row)
+                        row = r:fetch({}, "a")
+                    end
+                    r:close()
+                    table.insert(parsed_results, res)
+                else
+                    table.insert(parsed_results, { affected = r })
+                end
+                
+
+            end
+        else
+            -- SQLite or others
+            local r, e = conn:get_result()
+            if e then final_err = e end
+            if r then
+                if type(r) == "userdata" then
+                    local res = {}
+                    local row = r:fetch({}, "a")
+                    while row do
+                        local r_row = {}
+                        for k, v in pairs(row) do r_row[k] = v end
+                        table.insert(res, r_row)
+                        row = r:fetch({}, "a")
+                    end
+                    r:close()
+                    table.insert(parsed_results, res)
+                else
+                    table.insert(parsed_results, { affected = r })
+                end
             end
         end
     end

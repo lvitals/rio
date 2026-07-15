@@ -111,12 +111,6 @@ function MySQLAdapter:query(sql, bindings)
                 else
                     table.insert(all_results, { affected = res })
                 end
-
-                if conn.hasnextresult and not conn:hasnextresult() then
-                    break
-                elseif not conn.hasnextresult then
-                    break
-                end
             end
             
             self:release_connection(conn, env)

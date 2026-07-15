@@ -66,10 +66,19 @@ luarocks install rio-dev-1.rockspec --local
 ```
 
 ### 3. Running Tests
-You can run the full test suite locally by executing:
+By default, running the test suite will run against SQLite and automatically skip MySQL and PostgreSQL if they are not running.
+
+To run the full test suite (including MySQL and PostgreSQL), spin up the test databases using Docker Compose (or Podman):
 ```bash
+# Start the database containers
+docker compose up -d   # or: podman-compose up -d
+
+# Run the test suite
 chmod +x test/run_tests.sh
 ./test/run_tests.sh
+
+# Tear down the database containers
+docker compose down   # or: podman-compose down
 ```
 This script will automatically configure the correct environment variables and run all test specifications using Busted.
 

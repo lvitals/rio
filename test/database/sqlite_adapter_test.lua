@@ -25,7 +25,7 @@ describe("Rio SQLite Adapter", function()
         
         RioUI.box("SQLite Connectivity Info", function()
             RioUI.status("Database Connection", true, config.database)
-            RioUI.status("Driver Async-like Mode", (conn.getfd ~= nil), "FD Exposure active")
+            RioUI.status("Driver Async-like Mode", true, (conn.getfd ~= nil) and "Active" or "Inactive (Synchronous)")
             RioUI.status("Cqueues Integration", (pcall(require, "cqueues")), "Ready for Event Loop")
         end)
         

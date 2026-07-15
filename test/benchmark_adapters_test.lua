@@ -25,6 +25,7 @@ describe("Rio Framework Async Adapters Benchmark", function()
             -- Unified pre-check with test context
             if test_config.skip_if_no_db(adapter_name, "Benchmark: " .. adapter_name .. " " .. mode_label) then return end
             
+
             local config = test_config.configs[adapter_name]
             -- Set pool to CONCURRENCY for benchmark
             config.pool = CONCURRENCY
