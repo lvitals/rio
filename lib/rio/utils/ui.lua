@@ -99,6 +99,110 @@ local function process_text_lines(text)
     return processed
 end
 
+local function utf8_take(s, max_len)
+    s = tostring(s or "")
+    if max_len <= 0 then return "", s end
+    if get_visible_len(s) <= max_len then return s, "" end
+
+    if not utf8 then
+        return s:sub(1, max_len), s:sub(max_len + 1)
+    end
+
+    local res = ""
+    local count = 0
+    local bytes = 0
+    for pos, c in utf8.codes(s) do
+        local char = utf8.char(c)
+        local char_vis = get_visible_len(char)
+        if count + char_vis > max_len then break end
+        res = res .. char
+        count = count + char_vis
+        bytes = pos + #char - 1
+    end
+
+    return res, s:sub(bytes + 1)
+end
+
+local function trim_left(s)
+    return tostring(s or ""):gsub("^%s+", "")
+end
+
+local function wrap_visible_line(line, width)
+    local wrapped = {}
+    line = tostring(line or "")
+
+    if width <= 0 then
+        table.insert(wrapped, line)
+        return wrapped
+    end
+
+    if line == "" then
+        table.insert(wrapped, "")
+        return wrapped
+    end
+
+    while get_visible_len(line) > width do
+        local chunk, rest = utf8_take(line, width)
+        local break_at = chunk:match("^.*()%s+%S*$")
+
+        if break_at and break_at > 1 then
+            rest = line:sub(break_at)
+            chunk = chunk:sub(1, break_at - 1)
+        end
+
+        table.insert(wrapped, chunk)
+        line = trim_left(rest)
+        if line == "" then break end
+    end
+
+    if line ~= "" then table.insert(wrapped, line) end
+    return wrapped
+end
+
+local function wrap_text(text, width)
+    local wrapped = {}
+    for _, line in ipairs(process_text_lines(text)) do
+        for _, wrapped_line in ipairs(wrap_visible_line(line, width)) do
+            table.insert(wrapped, wrapped_line)
+        end
+    end
+    if #wrapped == 0 then table.insert(wrapped, "") end
+    return wrapped
+end
+
+local function print_box_line(content, inner_width)
+    local vis_line = get_visible_len(content)
+    local padding = inner_width - vis_line
+    if padding < 0 then padding = 0 end
+    print(colors.bold .. colors.cyan .. "│" .. colors.reset .. content .. string.rep(" ", padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
+end
+
+local function render_pair(left_content, pipe_pos, value, value_color, inner_width)
+    local fill = pipe_pos - get_visible_len(left_content)
+    if fill < 1 then fill = 1 end
+
+    local line = left_content .. colors.reset .. string.rep(" ", fill)
+    if value == nil then
+        print_box_line(line, inner_width)
+        return
+    end
+
+    local value_text = tostring(value)
+    local separator = colors.dim .. "│ " .. colors.reset
+    local inline_width = inner_width - pipe_pos - get_visible_len(separator)
+    local value_lines = process_text_lines(value_text)
+    if #value_lines == 1 and get_visible_len(value_lines[1]) <= inline_width then
+        print_box_line(line .. separator .. value_color .. value_lines[1], inner_width)
+        return
+    end
+
+    print_box_line(line, inner_width)
+    local continuation_prefix = "  "
+    for _, wrapped_line in ipairs(wrap_text(value_text, inner_width - get_visible_len(continuation_prefix))) do
+        print_box_line(continuation_prefix .. value_color .. wrapped_line .. colors.reset, inner_width)
+    end
+end
+
 M.drawing_box = false
 
 -- Core Components
@@ -194,24 +298,7 @@ function M.status(label, success, details)
     
     local display_label = utf8_truncate(label, max_label_len)
     local left_part = "  " .. icon .. " " .. colors.white .. display_label
-    local vis_left = get_visible_len(left_part)
-    
-    local fill = pipe_pos - vis_left
-    if fill < 1 then fill = 1 end
-    
-    local line = left_part .. colors.reset .. string.rep(" ", fill)
-    
-    if details then
-        local max_details_len = inner_width - pipe_pos - 3
-        local display_details = utf8_truncate(tostring(details), max_details_len)
-        line = line .. colors.dim .. "│ " .. colors.reset .. colors.cyan .. display_details
-    end
-    
-    local vis_line = get_visible_len(line)
-    local final_padding = inner_width - vis_line
-    if final_padding < 0 then final_padding = 0 end
-    
-    print(colors.bold .. colors.cyan .. "│" .. colors.reset .. line .. string.rep(" ", final_padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
+    render_pair(left_part, pipe_pos, details, colors.cyan, inner_width)
 
     if not M.drawing_box then
         print(colors.bold .. colors.cyan .. "╰" .. string.rep("─", inner_width) .. "╯" .. colors.reset)
@@ -232,24 +319,7 @@ function M.row(label, value)
     
     local display_label = utf8_truncate(label, max_label_len)
     local left_part = "  " .. colors.white .. display_label
-    local vis_left = get_visible_len(left_part)
-    
-    local fill = pipe_pos - vis_left
-    if fill < 1 then fill = 1 end
-    
-    local line = left_part .. colors.reset .. string.rep(" ", fill)
-    
-    if value then
-        local max_val_len = inner_width - pipe_pos - 3
-        local display_val = utf8_truncate(tostring(value), max_val_len)
-        line = line .. colors.dim .. "│ " .. colors.reset .. colors.cyan .. display_val
-    end
-    
-    local vis_line = get_visible_len(line)
-    local final_padding = inner_width - vis_line
-    if final_padding < 0 then final_padding = 0 end
-    
-    print(colors.bold .. colors.cyan .. "│" .. colors.reset .. line .. string.rep(" ", final_padding) .. colors.bold .. colors.cyan .. "│" .. colors.reset)
+    render_pair(left_part, pipe_pos, value, colors.cyan, inner_width)
 
     if not M.drawing_box then
         print(colors.bold .. colors.cyan .. "╰" .. string.rep("─", inner_width) .. "╯" .. colors.reset)
