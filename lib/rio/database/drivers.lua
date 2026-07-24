@@ -23,13 +23,7 @@ local specs = {
         build_variables = {
             {
                 name = "MYSQL_INCDIR",
-                header = "mysql.h",
-                candidates = {
-                    "/usr/include/mysql",
-                    "/usr/include/mariadb",
-                    "/usr/local/include/mysql",
-                    "/usr/local/include/mariadb"
-                }
+                header = "mysql.h"
             }
         }
     },
@@ -43,11 +37,7 @@ local specs = {
         build_variables = {
             {
                 name = "PGSQL_INCDIR",
-                header = "libpq-fe.h",
-                candidates = {
-                    "/usr/include/postgresql",
-                    "/usr/local/include/postgresql"
-                }
+                header = "libpq-fe.h"
             }
         }
     }
