@@ -140,8 +140,10 @@ local function print_driver_install_hint(adapter)
     ui.status("Database driver", false, spec.label .. " is not installed")
     ui.box("Install Driver", function()
         ui.row("Rio command", "rio db:install " .. spec.adapter)
-        ui.row("Ubuntu/Debian", spec.system_packages.debian)
-        ui.row("Arch Linux", spec.system_packages.arch)
+        ui.row("Native dependency", spec.native_dependency)
+        for _, var in ipairs(spec.build_variables or {}) do
+            ui.row("Build variable", var.name .. "=<include_dir>")
+        end
     end)
 end
 
@@ -2259,8 +2261,7 @@ local function run_db_install(args)
     ui.header("Database Driver Install")
     ui.box(spec.label, function()
         ui.row("LuaRocks package", spec.rock)
-        ui.row("Ubuntu/Debian", spec.system_packages.debian)
-        ui.row("Arch Linux", spec.system_packages.arch)
+        ui.row("Native dependency", spec.native_dependency)
         if opts.tree then ui.row("Target tree", opts.tree) end
         for _, arg in ipairs(opts.extra_args or {}) do
             if arg:match("^[%w_]+=") then ui.row("Build option", arg) end

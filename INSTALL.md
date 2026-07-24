@@ -10,38 +10,22 @@ Before installing Rio, you need to have the following software installed on your
 - **LuaRocks** (the package manager for Lua modules)
 - **C compiler** (like `gcc`) and build tools (like `make`)
 - **Database libraries only when installing a database driver:**
-  - **SQLite3:** `libsqlite3-dev`
-  - **MySQL/MariaDB:** `libmysqlclient-dev` (or `libmariadb-dev-compat`)
-  - **PostgreSQL:** `libpq-dev`
-
-### On Ubuntu/Debian:
-```bash
-sudo apt-get update
-sudo apt-get install lua5.4 luarocks build-essential
-```
-
-### On Arch Linux:
-```bash
-sudo pacman -Syu
-sudo pacman -S lua luarocks base-devel m4 openssl pkgconf
-```
+  - **SQLite3:** `sqlite3.h` and `libsqlite3`
+  - **MySQL/MariaDB:** `mysql.h` and a MySQL/MariaDB client library
+  - **PostgreSQL:** `libpq-fe.h` and `libpq`
 
 ## Troubleshooting Build Issues
 
 If you encounter errors during installation, especially when installing dependencies like `cqueues` or `luaossl`, it is often due to missing native build tools or libraries.
 
 ### "m4: command not found"
-This happens during the installation of `cqueues`. Install `m4`:
-- **Ubuntu/Debian:** `sudo apt-get install m4`
-- **Arch Linux:** `sudo pacman -S m4`
+This happens during the installation of `cqueues`. Install `m4` with your operating system package manager, then rerun the LuaRocks command.
 
 ### "openssl/evp.h: No such file or directory"
-This happens during the installation of `luaossl` or `luasec`. Install OpenSSL development headers:
-- **Ubuntu/Debian:** `sudo apt-get install libssl-dev`
-- **Arch Linux:** `sudo pacman -S openssl`
+This happens during the installation of `luaossl` or `luasec`. Install OpenSSL development headers with your operating system package manager, then rerun the LuaRocks command.
 
 ### "Database driver installation fails"
-If `luasql-mysql` or `luasql-postgres` fail to install, ensure you have the correct client libraries installed (see Prerequisites). For MySQL on some systems, you might need to specify the include and library paths:
+If a LuaSQL driver fails to install, ensure you have the matching database client headers and library installed (see Prerequisites). When headers are installed in a non-default directory, pass the include/library paths through LuaRocks variables:
 ```bash
 rio db:install mysql MYSQL_INCDIR=/usr/include/mysql MYSQL_LIBDIR=/usr/lib
 ```

@@ -10,10 +10,7 @@ local specs = {
         aliases = { "sqlite", "sqlite3" },
         module = "luasql.sqlite3",
         rock = "luasql-sqlite3",
-        system_packages = {
-            debian = "libsqlite3-dev",
-            arch = "sqlite"
-        },
+        native_dependency = "SQLite development headers and library (sqlite3.h, libsqlite3)",
         build_variables = {}
     },
     mysql = {
@@ -22,10 +19,7 @@ local specs = {
         aliases = { "mysql", "mariadb", "maria" },
         module = "luasql.mysql",
         rock = "luasql-mysql",
-        system_packages = {
-            debian = "libmysqlclient-dev or libmariadb-dev-compat",
-            arch = "mariadb-libs"
-        },
+        native_dependency = "MySQL or MariaDB client development headers and library (mysql.h, libmysqlclient or libmariadb)",
         build_variables = {
             {
                 name = "MYSQL_INCDIR",
@@ -45,10 +39,7 @@ local specs = {
         aliases = { "postgres", "postgresql", "pgsql" },
         module = "luasql.postgres",
         rock = "luasql-postgres",
-        system_packages = {
-            debian = "libpq-dev",
-            arch = "postgresql-libs"
-        },
+        native_dependency = "PostgreSQL client development headers and library (libpq-fe.h, libpq)",
         build_variables = {
             {
                 name = "PGSQL_INCDIR",
