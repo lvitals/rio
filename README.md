@@ -35,6 +35,7 @@ rio generate scaffold Post title:string body:text published:boolean
 
 ### 3. Setup the Database
 ```bash
+rio db:install sqlite
 rio db:setup
 ```
 
@@ -55,14 +56,15 @@ cd rio
 ```
 
 ### 2. Install dependencies & framework locally
-On architectures like **Arch Linux**, you must explicitly provide the MySQL include directory:
-```bash
-luarocks install rio-dev-1.rockspec --local MYSQL_INCDIR=/usr/include/mysql
-```
-
-For other systems (e.g., Ubuntu/Debian), installing from the local rockspec usually works out of the box:
+Rio database drivers are optional. Installing the framework no longer requires MySQL, MariaDB, PostgreSQL, or SQLite development headers up front:
 ```bash
 luarocks install rio-dev-1.rockspec --local
+```
+
+Install the database driver only when a project needs it:
+```bash
+rio db:install sqlite      # or: mysql, mariadb, postgresql
+rio db:uninstall sqlite    # remove it later if no project needs it
 ```
 
 ### 3. Running Tests

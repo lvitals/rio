@@ -30,7 +30,7 @@ A comprehensive demonstration of the **Rio Framework**, showcasing advanced feat
 ### 1. Installation
 Ensure you have the Rio Framework installed. Then, install the SQLite3 driver:
 ```bash
-luarocks install luasql-sqlite3 --local
+rio db:install sqlite
 ```
 
 ### 2. Database Setup

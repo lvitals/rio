@@ -8,6 +8,7 @@ local socket_ok, socket = pcall(require, "socket")
 
 local ui = require("rio.utils.ui")
 local colors = ui.colors
+local db_drivers = require("rio.database.drivers")
 
 cli.colors = colors
 cli.ui = ui
@@ -113,6 +114,46 @@ local function parse_fields(fields)
         end
     end
     return order, definitions
+end
+
+local function normalize_database_adapter(adapter, allow_none)
+    if not adapter then return nil end
+    local value = tostring(adapter):lower()
+    if allow_none and value == "none" then return "none" end
+    local spec = db_drivers.get(value)
+    return spec and spec.adapter or nil
+end
+
+local function print_driver_install_hint(adapter)
+    local spec = db_drivers.get(adapter)
+    if not spec then return end
+
+    ui.status("Database driver", false, spec.label .. " is not installed")
+    ui.box("Install Driver", function()
+        ui.row("Rio command", "rio db:install " .. spec.adapter)
+        ui.row("Ubuntu/Debian", spec.system_packages.debian)
+        ui.row("Arch Linux", spec.system_packages.arch)
+    end)
+end
+
+local function is_database_driver_available(adapter)
+    local effective_lua_path, effective_lua_cpath = get_lua_paths()
+    return db_drivers.check(adapter, effective_lua_path, effective_lua_cpath)
+end
+
+local function ensure_database_driver_available(adapter)
+    local normalized = normalize_database_adapter(adapter)
+    if not normalized then
+        ui.status("Database adapter", false, "Invalid adapter '" .. tostring(adapter) .. "'")
+        ui.line("Supported adapters: " .. db_drivers.supported_names(), colors.dim)
+        return false
+    end
+
+    local ok = is_database_driver_available(normalized)
+    if ok then return true end
+
+    print_driver_install_hint(normalized)
+    return false
 end
 
 local generate_database_content -- Forward declaration
@@ -346,6 +387,9 @@ rio_tests.setup()
 ]])
 
     ui.alert_title("success", "project", project_name .. (api_only and " (API-only)" or "") .. " created successfully!")
+    if database_adapter ~= "none" and not is_database_driver_available(database_adapter) then
+        print_driver_install_hint(database_adapter)
+    end
     ui.info("To run your application, navigate to the project directory and run: lua app.lua or rio server")
 end
 
@@ -1963,54 +2007,33 @@ return {
 end
 
 local function interactive_db_setup()
-    print("\n" .. colors.cyan .. "Rio Database Setup" .. colors.reset)
-    print("--------------------")
-    print("No database configuration found or config is empty.")
-    print("Please choose a database adapter:")
+    ui.header("Rio Database Setup")
+    ui.info("No database configuration found or config is empty.")
 
-    -- Dynamically list adapters from lib/rio/database/adapters/
-    local adapter_dir = "lib/rio/database/adapters"
-    -- Check relative path from current bin location
-    local base_path = debug.getinfo(1, "S").source:match("@(.*/)") or ""
-    local full_adapter_dir = base_path .. "../lib/rio/database/adapters"
-
-    local handle = io.popen("ls " .. full_adapter_dir .. "/*.lua 2>/dev/null")
-    local adapters = {}
-    if handle then
-        for file in handle:lines() do
-            local name = file:match("([^/]+)%.lua$")
-            if name and name ~= "base" then
-                table.insert(adapters, name)
-            end
+    local adapter_specs = db_drivers.all()
+    ui.box("Choose Adapter", function()
+        for i, spec in ipairs(adapter_specs) do
+            local label = spec.label
+            if spec.adapter == "sqlite" then label = label .. " (recommended for development)" end
+            ui.row(tostring(i), label)
         end
-        handle:close()
-    end
-
-    if #adapters == 0 then
-        -- Fallback to hardcoded defaults if directory scan fails
-        adapters = {"sqlite", "postgres", "mysql"}
-    end
-
-    for i, name in ipairs(adapters) do
-        local label = name:sub(1,1):upper() .. name:sub(2)
-        if name == "sqlite" then label = "SQLite (recommended for development)" end
-        print(string.format("%d) %s", i, label))
-    end
-    print("q) Cancel")
+        ui.row("q", "Cancel")
+    end)
     
     io.write("\nSelection: ")
     local choice = io.read()
     
     if choice:lower() == "q" then
-        print("Setup cancelled.")
+        ui.info("Setup cancelled.")
         return nil
     end
 
     local choice_idx = tonumber(choice)
-    local adapter = adapters[choice_idx]
+    local adapter_spec = adapter_specs[choice_idx]
+    local adapter = adapter_spec and adapter_spec.adapter
 
     if not adapter then 
-        print("Invalid selection. Setup cancelled.")
+        ui.status("Database setup", false, "Invalid selection")
         return nil
     end
     
@@ -2048,7 +2071,10 @@ local function interactive_db_setup()
     if content ~= "" then
         create_dir_if_not_exists("config")
         write_file_content("config/database.lua", content)
-        print(colors.green .. "\n✓ Created config/database.lua with " .. adapter .. " adapter." .. colors.reset)
+        ui.status("Database configuration", true, "Created config/database.lua with " .. adapter .. " adapter")
+        if not is_database_driver_available(adapter) then
+            print_driver_install_hint(adapter)
+        end
         
         -- Reload config
         package.loaded["config.database"] = nil
@@ -2079,6 +2105,19 @@ local function load_database_config()
     return db_config
 end
 
+local function read_database_config()
+    local original_package_path = package.path
+    package.path = "./config/?.lua;" .. package.path
+
+    local status, db_config = pcall(require, "config.database")
+    package.path = original_package_path
+
+    if not status or type(db_config) ~= "table" or next(db_config) == nil then
+        return nil
+    end
+    return db_config
+end
+
 local function get_database_full_path(db_config, env)
     local current_env_config = db_config[env]
     if not current_env_config then
@@ -2093,6 +2132,275 @@ local function get_database_full_path(db_config, env)
     return current_env_config.database
 end
 
+local function is_safe_luarocks_arg(arg)
+    return type(arg) == "string"
+        and arg ~= ""
+        and arg:match("^[%w_%.%-%+/=:@]+$") ~= nil
+end
+
+local function file_exists(path)
+    local file = io.open(path, "r")
+    if file then
+        file:close()
+        return true
+    end
+    return false
+end
+
+local function has_luarocks_variable(args, name)
+    for _, arg in ipairs(args or {}) do
+        if tostring(arg):match("^" .. name .. "=") then
+            return true
+        end
+    end
+    return false
+end
+
+local function add_detected_build_variables(spec, opts)
+    opts.extra_args = opts.extra_args or {}
+
+    for _, var in ipairs(spec.build_variables or {}) do
+        if not has_luarocks_variable(opts.extra_args, var.name) then
+            for _, candidate in ipairs(var.candidates or {}) do
+                if file_exists(candidate .. "/" .. var.header) then
+                    table.insert(opts.extra_args, var.name .. "=" .. candidate)
+                    break
+                end
+            end
+        end
+    end
+end
+
+local function run_db_drivers()
+    ui.header("Database Drivers")
+
+    for _, spec in ipairs(db_drivers.all()) do
+        local available = is_database_driver_available(spec.adapter)
+        local status = available and "installed" or "missing"
+        ui.row(spec.label, status .. " (" .. spec.module .. ")")
+    end
+
+    ui.line("Install example: rio db:install sqlite", colors.dim)
+end
+
+local function run_db_install(args)
+    args = args or {}
+
+    local adapter = nil
+    local opts = {
+        local_install = false,
+        extra_args = {}
+    }
+    local explicit_tree = false
+
+    for _, arg in ipairs(args) do
+        local named_adapter = arg:match("^%-%-adapter=(.+)$") or arg:match("^%-%-to=(.+)$")
+        local tree = arg:match("^%-%-tree=(.+)$")
+
+        if named_adapter then
+            adapter = named_adapter
+        elseif tree then
+            if not is_safe_luarocks_arg(tree) then
+                ui.status("Database driver install", false, "Unsafe --tree value")
+                return
+            end
+            opts.tree = tree
+            opts.local_install = false
+            explicit_tree = true
+        elseif arg == "--local" then
+            opts.local_install = true
+            explicit_tree = true
+        elseif arg == "--system" then
+            opts.local_install = false
+            explicit_tree = true
+        elseif arg:match("^%-") then
+            if not is_safe_luarocks_arg(arg) then
+                ui.status("Database driver install", false, "Unsafe LuaRocks option '" .. tostring(arg) .. "'")
+                return
+            end
+            table.insert(opts.extra_args, arg)
+        elseif not adapter then
+            adapter = arg
+        else
+            if not is_safe_luarocks_arg(arg) then
+                ui.status("Database driver install", false, "Unsafe LuaRocks argument '" .. tostring(arg) .. "'")
+                return
+            end
+            table.insert(opts.extra_args, arg)
+        end
+    end
+
+    if not adapter then
+        local db_config = read_database_config()
+        local env = os.getenv("RIO_ENV") or "development"
+        adapter = db_config and db_config[env] and db_config[env].adapter
+    end
+
+    local normalized = normalize_database_adapter(adapter)
+    if not normalized then
+        local detail = adapter and ("Invalid adapter '" .. tostring(adapter) .. "'") or "Adapter is required"
+        ui.status("Database driver install", false, detail)
+        ui.line("Usage: rio db:install <sqlite|mysql|mariadb|postgresql>", colors.yellow)
+        return
+    end
+
+    local spec = db_drivers.get(normalized)
+    local already_available = is_database_driver_available(normalized)
+    if already_available then
+        ui.status("Database driver", true, spec.label .. " is already installed (" .. spec.module .. ")")
+        return
+    end
+
+    if not explicit_tree then
+        opts.tree = db_drivers.infer_tree_from_cpath(package.cpath)
+    end
+    add_detected_build_variables(spec, opts)
+
+    ui.header("Database Driver Install")
+    ui.box(spec.label, function()
+        ui.row("LuaRocks package", spec.rock)
+        ui.row("Ubuntu/Debian", spec.system_packages.debian)
+        ui.row("Arch Linux", spec.system_packages.arch)
+        if opts.tree then ui.row("Target tree", opts.tree) end
+        for _, arg in ipairs(opts.extra_args or {}) do
+            if arg:match("^[%w_]+=") then ui.row("Build option", arg) end
+        end
+    end)
+
+    local command = db_drivers.install_command(normalized, opts)
+    ui.line("Running: " .. command, colors.dim)
+    local result = os.execute(command)
+    local ok = (result == true or result == 0)
+
+    if not ok then
+        ui.status("Database driver install", false, "LuaRocks could not install " .. spec.rock)
+        ui.info("Install the native package listed above, then run the same command again.")
+        return
+    end
+
+    package.loaded[spec.module] = nil
+    if is_database_driver_available(normalized) then
+        ui.status("Database driver install", true, spec.label .. " driver installed")
+    else
+        ui.status("Database driver install", false, "Rio still cannot load " .. spec.module)
+        ui.info("Run `eval $(luarocks path)` or check your LUA_PATH/LUA_CPATH.")
+    end
+end
+
+local function run_db_uninstall(args)
+    args = args or {}
+
+    local adapter = nil
+    local opts = {
+        local_install = false,
+        extra_args = {}
+    }
+    local explicit_tree = false
+    local force_requested = false
+
+    for _, arg in ipairs(args) do
+        local named_adapter = arg:match("^%-%-adapter=(.+)$") or arg:match("^%-%-from=(.+)$")
+        local tree = arg:match("^%-%-tree=(.+)$")
+
+        if named_adapter then
+            adapter = named_adapter
+        elseif tree then
+            if not is_safe_luarocks_arg(tree) then
+                ui.status("Database driver uninstall", false, "Unsafe --tree value")
+                return
+            end
+            opts.tree = tree
+            opts.local_install = false
+            explicit_tree = true
+        elseif arg == "--local" then
+            opts.local_install = true
+            explicit_tree = true
+        elseif arg == "--system" then
+            opts.local_install = false
+            explicit_tree = true
+        elseif arg == "--force" or arg == "--force-fast" then
+            force_requested = true
+            table.insert(opts.extra_args, arg)
+        elseif arg:match("^%-") then
+            if not is_safe_luarocks_arg(arg) then
+                ui.status("Database driver uninstall", false, "Unsafe LuaRocks option '" .. tostring(arg) .. "'")
+                return
+            end
+            table.insert(opts.extra_args, arg)
+        elseif not adapter then
+            adapter = arg
+        else
+            if not is_safe_luarocks_arg(arg) then
+                ui.status("Database driver uninstall", false, "Unsafe LuaRocks argument '" .. tostring(arg) .. "'")
+                return
+            end
+            table.insert(opts.extra_args, arg)
+        end
+    end
+
+    if not adapter then
+        local db_config = read_database_config()
+        local env = os.getenv("RIO_ENV") or "development"
+        adapter = db_config and db_config[env] and db_config[env].adapter
+    end
+
+    local normalized = normalize_database_adapter(adapter)
+    if not normalized then
+        local detail = adapter and ("Invalid adapter '" .. tostring(adapter) .. "'") or "Adapter is required"
+        ui.status("Database driver uninstall", false, detail)
+        ui.line("Usage: rio db:uninstall <sqlite|mysql|mariadb|postgresql>", colors.yellow)
+        return
+    end
+
+    local spec = db_drivers.get(normalized)
+    if not is_database_driver_available(normalized) then
+        ui.status("Database driver", true, spec.label .. " is already absent (" .. spec.module .. ")")
+        return
+    end
+
+    local db_config = read_database_config()
+    local env = os.getenv("RIO_ENV") or "development"
+    local current_adapter = db_config and db_config[env] and normalize_database_adapter(db_config[env].adapter)
+    if current_adapter == normalized and not force_requested then
+        ui.status("Database driver uninstall", false, "Current project uses " .. spec.label)
+        ui.line("Change config/database.lua or run: rio db:uninstall " .. spec.adapter .. " --force", colors.dim)
+        return
+    end
+
+    local effective_lua_path, effective_lua_cpath = get_lua_paths()
+    local module_path = db_drivers.module_path(normalized, effective_lua_path, effective_lua_cpath)
+    if not explicit_tree and module_path then
+        opts.tree = db_drivers.infer_tree_from_module_path(module_path)
+    end
+
+    ui.header("Database Driver Uninstall")
+    ui.box(spec.label, function()
+        ui.row("LuaRocks package", spec.rock)
+        ui.row("Module", spec.module)
+        if module_path then ui.row("Loaded from", module_path) end
+        if opts.tree then ui.row("Target tree", opts.tree) end
+    end)
+
+    local command = db_drivers.remove_command(normalized, opts)
+    ui.line("Running: " .. command, colors.dim)
+    local result = os.execute(command)
+    local ok = (result == true or result == 0)
+
+    if not ok then
+        ui.status("Database driver uninstall", false, "LuaRocks could not remove " .. spec.rock)
+        ui.info("If another rock depends on it, rerun with --force after checking that dependency.")
+        return
+    end
+
+    package.loaded[spec.module] = nil
+    if not is_database_driver_available(normalized) then
+        ui.status("Database driver uninstall", true, spec.label .. " driver removed")
+    else
+        ui.status("Database driver uninstall", false, "Rio can still load " .. spec.module)
+        ui.info("Check other LuaRocks trees with `luarocks list " .. spec.rock .. "`.")
+    end
+end
+
 local function get_db_connection(db_config, env)
     local current_env_config = db_config[env]
     if not current_env_config then
@@ -2100,6 +2408,10 @@ local function get_db_connection(db_config, env)
     end
 
     local adapter_name = current_env_config.adapter
+    if not ensure_database_driver_available(adapter_name) then
+        return nil, "Database driver is not installed."
+    end
+
     local effective_lua_path, effective_lua_cpath = get_lua_paths()
 
     local adapter
@@ -2149,7 +2461,11 @@ local function get_db_config_and_run(fn_name)
     local current_env_config = db_config[env]
 
     if not current_env_config then
-        print("Error: Database configuration not found for environment: " .. env)
+        ui.status("Database configuration", false, "Not found for environment: " .. env)
+        return
+    end
+
+    if not ensure_database_driver_available(current_env_config.adapter) then
         return
     end
 
@@ -2168,7 +2484,7 @@ local function get_db_config_and_run(fn_name)
     -- Initialize the manager which will load the adapter
     local ok_init, err_init = pcall(DB.initialize, current_env_config)
     if not ok_init then
-        print("Error initializing database: " .. tostring(err_init))
+        ui.status("Database initialization", false, tostring(err_init))
         package.path = original_package_path
         package.cpath = original_package_cpath
         return
@@ -2208,7 +2524,11 @@ local function run_db_version()
     local current_env_config = db_config[env]
 
     if not current_env_config then
-        print("Error: Database configuration not found for environment: " .. env)
+        ui.status("Database configuration", false, "Not found for environment: " .. env)
+        return
+    end
+
+    if not ensure_database_driver_available(current_env_config.adapter) then
         return
     end
 
@@ -2225,7 +2545,7 @@ local function run_db_version()
     
     local ok_init, err_init = pcall(DB.initialize, current_env_config)
     if not ok_init then
-        print("Error initializing database: " .. tostring(err_init))
+        ui.status("Database initialization", false, tostring(err_init))
         package.path = original_package_path
         package.cpath = original_package_cpath
         return
@@ -2234,17 +2554,17 @@ local function run_db_version()
     local db_name = current_env_config.database or current_env_config.host or "unknown"
     local version = Migrate.version()
 
-    print("")
-    print("database: " .. db_name)
-    print("Current version: " .. (version or "0"))
-    print("")
+    ui.header("Database Version")
+    ui.row("Database", db_name)
+    ui.row("Current version", version or "0")
 
     package.path = original_package_path
     package.cpath = original_package_cpath
 end
 
 local function run_db_seed_replant()
-    print("Replanting seeds...")
+    ui.header("Seed Replant")
+    ui.info("Replanting seeds...")
     get_db_config_and_run("seed")
 end
 
@@ -2256,22 +2576,16 @@ local function run_db_system_change(args)
     end
 
     if not to_adapter then
-        print(colors.red .. "Error: 'db:system:change' requires a target adapter via --to=<adapter>." .. colors.reset)
-        print("Example: rio db:system:change --to=postgresql")
+        ui.status("Database system change", false, "Target adapter is required")
+        ui.line("Example: rio db:system:change --to=postgresql", colors.dim)
         return
     end
 
-    -- Validate adapter
-    local valid_adapters = {
-        postgresql = "postgres", postgres = "postgres",
-        mysql = "mysql",
-        sqlite = "sqlite", sqlite3 = "sqlite"
-    }
-    local normalized_adapter = valid_adapters[to_adapter:lower()]
+    local normalized_adapter = normalize_database_adapter(to_adapter)
     
     if not normalized_adapter then
-        print(colors.red .. "Error: Invalid database adapter '" .. to_adapter .. "'." .. colors.reset)
-        print("Supported adapters: postgresql, mysql, sqlite3")
+        ui.status("Database adapter", false, "Invalid adapter '" .. to_adapter .. "'")
+        ui.line("Supported adapters: " .. db_drivers.supported_names(), colors.dim)
         return
     end
 
@@ -2280,7 +2594,7 @@ local function run_db_system_change(args)
         io.write(colors.yellow .. "Overwrite " .. config_file .. "? (y/N): " .. colors.reset)
         local answer = io.read()
         if not (answer and (answer:lower() == "y" or answer:lower() == "yes")) then
-            print("Operation cancelled.")
+            ui.info("Operation cancelled.")
             return
         end
     end
@@ -2317,7 +2631,10 @@ local function run_db_system_change(args)
     local content = generate_database_content(normalized_adapter, project_name, config)
     if content ~= "" then
         write_file_content(config_file, content)
-        print(colors.green .. "✓ Updated " .. config_file .. " to use " .. normalized_adapter .. "." .. colors.reset)
+        ui.status("Database configuration", true, "Updated " .. config_file .. " to use " .. normalized_adapter)
+        if not is_database_driver_available(normalized_adapter) then
+            print_driver_install_hint(normalized_adapter)
+        end
     end
 end
 
@@ -3275,8 +3592,8 @@ local function show_general_help()
         ui.row("runner <code|file>", "Run Lua code in app context")
         ui.row("routes [options]", "List defined application routes")
         ui.row("middleware", "Manage the middleware stack")
-        ui.row("db:<subcommand>", "Database management (migrate, seed...)")
-        ui.row("generate <type>", "Generate resources (scaffold, model...)")
+        ui.row("db:<subcommand>", "Manage database")
+        ui.row("generate <type>", "Generate app code")
         ui.row("destroy <type>", "Undo a generation")
         ui.row("stats", "Project statistics (LOC, methods)")
         ui.row("initializers", "List application initializers")
@@ -3347,6 +3664,9 @@ local function show_db_help()
     ui.line("Usage: rio db:<subcommand> [options]", colors.yellow)
     
     ui.box("Available Subcommands", function()
+        ui.row("db:drivers", "Show optional driver status")
+        ui.row("db:install", "Install database driver")
+        ui.row("db:uninstall", "Remove database driver")
         ui.row("db:create", "Create DB for current environment")
         ui.row("db:drop", "Delete DB for current environment")
         ui.row("db:migrate", "Run pending migrations")
@@ -3361,6 +3681,7 @@ local function show_db_help()
         ui.row("db:seed:replant", "Truncate all tables and re-seed")
     end)
 
+    ui.line("Examples: rio db:install sqlite | rio db:uninstall sqlite", colors.dim)
     ui.line("Example: rio db:migrate", colors.dim)
 end
 
@@ -3371,7 +3692,7 @@ local function show_new_help()
     ui.info("Creates a new Rio project with a default directory structure.")
     
     ui.box("Options", function()
-        ui.row("--database=ADAPTER", "postgresql, mysql, sqlite3, none")
+        ui.row("--database=ADAPTER", db_drivers.supported_names() .. ", none")
         ui.row("--api", "Configure for API-only use")
     end)
 
@@ -3557,10 +3878,10 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
             show_new_help()
             return
         else
-            -- Validate database_adapter
-            local valid_adapters = {["postgresql"]=true, ["mysql"]=true, ["sqlite3"]=true, ["none"]=true}
-            if not valid_adapters[database_adapter] then
-                print("Error: Invalid database adapter '" .. database_adapter .. "'. Supported adapters are: postgresql, mysql, sqlite3, none.")
+            database_adapter = normalize_database_adapter(database_adapter, true)
+            if not database_adapter then
+                ui.status("Project creation", false, "Invalid database adapter")
+                ui.line("Supported adapters: " .. db_drivers.supported_names() .. ", none", colors.dim)
                 return
             end
             new_project(project_name, database_adapter, api_only)
@@ -3765,7 +4086,13 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
             return
         end
 
-        if subcommand == "create" then
+        if subcommand == "drivers" then
+            run_db_drivers()
+        elseif subcommand == "install" then
+            run_db_install(remaining_args)
+        elseif subcommand == "uninstall" or subcommand == "remove" then
+            run_db_uninstall(remaining_args)
+        elseif subcommand == "create" then
             run_db_create()
         elseif subcommand == "drop" then
             run_db_drop()

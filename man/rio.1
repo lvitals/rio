@@ -26,7 +26,10 @@ The
 .Fl -api
 option disables view rendering and configures the app for JSON responses only.
 Supported databases:
-.Ar postgresql , mysql , sqlite3 , none .
+.Ar postgresql , mysql , mariadb , sqlite3 , none .
+Database drivers are optional and can be installed later with
+.Cm rio db:install
+.Ar adapter .
 .It Cm server Op Fl p Ar port Op Fl b Ar binding Op Fl e Ar environment Op Fl d Op Fl -pid=FILE
 Starts the Rio web server.
 Options:
@@ -138,6 +141,18 @@ manage the database schema and lifecycle.
 .Bl -tag -width "db:seed:replant"
 .It Cm db:create , db:drop
 Creates or removes the physical database.
+.It Cm db:drivers
+Shows which optional database drivers are installed.
+.It Cm db:install Ar adapter
+Installs the LuaSQL driver for
+.Ar sqlite3 ,
+.Ar mysql/mariadb ,
+or
+.Ar postgresql .
+.It Cm db:uninstall Ar adapter
+Removes the LuaSQL driver for an adapter.
+.Cm db:remove
+is accepted as an alias.
 .It Cm db:migrate , db:rollback
 Applies or reverts schema migrations.
 .It Cm db:status , db:version

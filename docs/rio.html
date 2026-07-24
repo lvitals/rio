@@ -58,8 +58,10 @@
   <dd>Creates a new Rio application structure. The <code class="Fl">--api</code>
       option disables view rendering and configures the app for JSON responses
       only. Supported databases: <var class="Ar">postgresql</var>,
-      <var class="Ar">mysql</var>, <var class="Ar">sqlite3</var>,
-      <var class="Ar">none</var>.</dd>
+      <var class="Ar">mysql</var>, <var class="Ar">mariadb</var>,
+      <var class="Ar">sqlite3</var>, <var class="Ar">none</var>. Database
+      drivers are optional and can be installed later with <code class="Cm">rio
+      db:install</code> <var class="Ar">adapter</var>.</dd>
   <dt id="server"><a class="permalink" href="#server"><code class="Cm">server</code></a>
     [<code class="Fl">-p</code> <var class="Ar">port</var>
     [<code class="Fl">-b</code> <var class="Ar">binding</var>
@@ -209,6 +211,17 @@
   <dt id="db:create"><a class="permalink" href="#db:create"><code class="Cm">db:create</code></a>,
     <code class="Cm">db:drop</code></dt>
   <dd>Creates or removes the physical database.</dd>
+  <dt id="db:drivers"><a class="permalink" href="#db:drivers"><code class="Cm">db:drivers</code></a></dt>
+  <dd>Shows which optional database drivers are installed.</dd>
+  <dt id="db:install"><a class="permalink" href="#db:install"><code class="Cm">db:install</code></a>
+    <var class="Ar">adapter</var></dt>
+  <dd>Installs the LuaSQL driver for <var class="Ar">sqlite3</var>,
+      <var class="Ar">mysql/mariadb</var>, or
+    <var class="Ar">postgresql</var>.</dd>
+  <dt id="db:uninstall"><a class="permalink" href="#db:uninstall"><code class="Cm">db:uninstall</code></a>
+    <var class="Ar">adapter</var></dt>
+  <dd>Removes the LuaSQL driver for an adapter.
+      <code class="Cm">db:remove</code> is accepted as an alias.</dd>
   <dt id="db:migrate"><a class="permalink" href="#db:migrate"><code class="Cm">db:migrate</code></a>,
     <code class="Cm">db:rollback</code></dt>
   <dd>Applies or reverts schema migrations.</dd>
@@ -479,7 +492,7 @@
 <table class="foot">
   <tr>
     <td class="foot-date">April 2, 2026</td>
-    <td class="foot-os">Linux 6.19.9-arch1-1</td>
+    <td class="foot-os">Linux 7.1.4-arch1-1</td>
   </tr>
 </table>
 </body>

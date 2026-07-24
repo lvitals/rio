@@ -31,7 +31,7 @@ All samples use **SQLite3** by default for ease of setup.
 ### Prerequisites
 Make sure you have the Rio Framework installed and the SQLite3 driver available:
 ```bash
-luarocks install luasql-sqlite3 --local
+rio db:install sqlite
 ```
 
 ### Quick Execution

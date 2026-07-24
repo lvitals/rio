@@ -4,6 +4,17 @@
 local BaseAdapter = {}
 BaseAdapter.__index = BaseAdapter
 
+local ok_drivers, driver_registry = pcall(require, "rio.database.drivers")
+local ok_ui, ui = pcall(require, "rio.utils.ui")
+
+local function warn_missing_driver(message)
+    if ok_ui and ui and ui.warn then
+        ui.warn(message)
+    else
+        print(message)
+    end
+end
+
 function BaseAdapter:new(config)
     local o = setmetatable({
         config = config or {},
@@ -24,7 +35,16 @@ function BaseAdapter:initialize()
     local ok, mod = pcall(require, self:get_luasql_module())
     if not ok then
         self.driver_available = false
-        print(string.format("⚠️  Driver '%s' not found. Please run: luarocks install %s", self:get_luasql_module(), self:get_luasql_module():gsub("%.", "-")))
+        local spec = ok_drivers and driver_registry.get_by_module(self:get_luasql_module()) or nil
+        if spec then
+            warn_missing_driver(string.format(
+                "Database driver '%s' is not installed. Run: rio db:install %s",
+                spec.module,
+                spec.adapter
+            ))
+        else
+            warn_missing_driver(string.format("Database driver '%s' is not installed.", self:get_luasql_module()))
+        end
     else
         self.driver = mod
         self.driver_available = true

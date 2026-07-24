@@ -9,7 +9,7 @@ Before installing Rio, you need to have the following software installed on your
 - **Lua 5.1, 5.2, 5.3, or 5.4**
 - **LuaRocks** (the package manager for Lua modules)
 - **C compiler** (like `gcc`) and build tools (like `make`)
-- **Database libraries** for your chosen driver:
+- **Database libraries only when installing a database driver:**
   - **SQLite3:** `libsqlite3-dev`
   - **MySQL/MariaDB:** `libmysqlclient-dev` (or `libmariadb-dev-compat`)
   - **PostgreSQL:** `libpq-dev`
@@ -17,13 +17,13 @@ Before installing Rio, you need to have the following software installed on your
 ### On Ubuntu/Debian:
 ```bash
 sudo apt-get update
-sudo apt-get install lua5.4 luarocks build-essential libsqlite3-dev libmysqlclient-dev libpq-dev
+sudo apt-get install lua5.4 luarocks build-essential
 ```
 
 ### On Arch Linux:
 ```bash
 sudo pacman -Syu
-sudo pacman -S lua luarocks base-devel m4 openssl pkgconf sqlite mariadb-libs postgresql-libs
+sudo pacman -S lua luarocks base-devel m4 openssl pkgconf
 ```
 
 ## Troubleshooting Build Issues
@@ -43,7 +43,7 @@ This happens during the installation of `luaossl` or `luasec`. Install OpenSSL d
 ### "Database driver installation fails"
 If `luasql-mysql` or `luasql-postgres` fail to install, ensure you have the correct client libraries installed (see Prerequisites). For MySQL on some systems, you might need to specify the include and library paths:
 ```bash
-luarocks install luasql-mysql MYSQL_INCDIR=/usr/include/mysql MYSQL_LIBDIR=/usr/lib
+rio db:install mysql MYSQL_INCDIR=/usr/include/mysql MYSQL_LIBDIR=/usr/lib
 ```
 
 ## Install Rio Framework
@@ -81,22 +81,31 @@ rio about
 
 ## Setting Up Database Drivers
 
-Rio supports multiple database backends. You must install the corresponding LuaSQL driver for your database.
+Rio supports multiple database backends. The framework installs without database drivers; install the corresponding LuaSQL driver only for the database your app uses.
+
+Check driver status:
+```bash
+rio db:drivers
+```
+
+Remove an unused driver:
+```bash
+rio db:uninstall sqlite
+```
 
 ### SQLite3 (Recommended for Development)
 ```bash
-luarocks install luasql-sqlite3 --local
+rio db:install sqlite
 ```
 
 ### MySQL/MariaDB
 ```bash
-# You may need to provide include and library paths for the installation
-luarocks install luasql-mysql MYSQL_INCDIR=/usr/include/mysql MYSQL_LIBDIR=/usr/lib --local
+rio db:install mysql
 ```
 
 ### PostgreSQL
 ```bash
-luarocks install luasql-postgres --local
+rio db:install postgresql
 ```
 
 ## Creating Your First Project
@@ -104,6 +113,7 @@ luarocks install luasql-postgres --local
 ```bash
 rio new my_awesome_project --database=sqlite3
 cd my_awesome_project
+rio db:install sqlite
 rio db:setup
 rio server
 ```

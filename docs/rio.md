@@ -31,7 +31,10 @@ template engine (ETL), and the caching system.
 > **--api**
 > option disables view rendering and configures the app for JSON responses only.
 > Supported databases:
-> *postgresql*, *mysql*, *sqlite3*, *none*.
+> *postgresql*, *mysql*, *mariadb*, *sqlite3*, *none*.
+> Database drivers are optional and can be installed later with
+> **rio db:install**
+> *adapter*.
 
 **server** \[**-p** *port* \[**-b** *binding* \[**-e** *environment* \[**-d** \[**--pid=FILE**]]]]]
 
@@ -193,6 +196,24 @@ manage the database schema and lifecycle.
 **db:create**, **db:drop**
 
 > Creates or removes the physical database.
+
+**db:drivers**
+
+> Shows which optional database drivers are installed.
+
+**db:install** *adapter*
+
+> Installs the LuaSQL driver for
+> *sqlite3*,
+> *mysql/mariadb*,
+> or
+> *postgresql*.
+
+**db:uninstall** *adapter*
+
+> Removes the LuaSQL driver for an adapter.
+> **db:remove**
+> is accepted as an alias.
 
 **db:migrate**, **db:rollback**
 
@@ -479,4 +500,4 @@ The Rio Framework Team.
 
 Report bugs at the official repository.
 
-Linux 6.19.9-arch1-1 - April 2, 2026
+Linux 7.1.4-arch1-1 - April 2, 2026

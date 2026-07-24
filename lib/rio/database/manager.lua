@@ -118,14 +118,10 @@ local function format_error_obj(err)
             if os.getenv("RIO_ENV") == "test" or _G.RIO_ENV == "test" then
                 return "DatabaseError: " .. t.message
             end
-            return "\n" .. string.rep("=", 80) .. "\n" ..
-                   "  RIO DATABASE ERROR [" .. t.env:upper() .. "]\n" ..
-                   string.rep("-", 80) .. "\n" ..
-                   "  " .. t.message .. "\n" ..
-                   string.rep("-", 80) .. "\n" ..
-                   "  💡 SUGGESTION:\n" ..
-                   "     " .. t.suggestion .. (t.command and ("\n\n     Run this command:\n     $ " .. t.command) or "") .. "\n" ..
-                   string.rep("=", 80) .. "\n"
+            return "RIO DATABASE ERROR [" .. t.env:upper() .. "]\n" ..
+                   t.message .. "\n\n" ..
+                   "Suggestion:\n" ..
+                   t.suggestion .. (t.command and ("\n\nRun this command:\n$ " .. t.command) or "")
         end
     })
 
@@ -162,14 +158,10 @@ local function wrap_adapter_call(method_name, ...)
                 if os.getenv("RIO_ENV") == "test" or _G.RIO_ENV == "test" then
                     return "AdapterError: " .. t.message
                 end
-                return "\n" .. string.rep("!", 80) .. "\n" ..
-                       "  RIO ADAPTER ERROR\n" ..
-                       string.rep("-", 80) .. "\n" ..
-                       "  " .. t.message .. "\n" ..
-                       string.rep("-", 80) .. "\n" ..
-                       "  💡 SUGGESTION:\n" ..
-                       "     " .. t.suggestion .. "\n" ..
-                       string.rep("!", 80) .. "\n"
+                return "RIO ADAPTER ERROR\n" ..
+                       t.message .. "\n\n" ..
+                       "Suggestion:\n" ..
+                       t.suggestion
             end
         })
         return nil, error_data

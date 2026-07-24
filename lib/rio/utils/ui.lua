@@ -190,16 +190,31 @@ local function render_pair(left_content, pipe_pos, value, value_color, inner_wid
     local value_text = tostring(value)
     local separator = colors.dim .. "│ " .. colors.reset
     local inline_width = inner_width - pipe_pos - get_visible_len(separator)
-    local value_lines = process_text_lines(value_text)
-    if #value_lines == 1 and get_visible_len(value_lines[1]) <= inline_width then
-        print_box_line(line .. separator .. value_color .. value_lines[1], inner_width)
-        return
-    end
+    local wrapped_lines = wrap_text(value_text, inline_width)
+    print_box_line(line .. separator .. value_color .. wrapped_lines[1] .. colors.reset, inner_width)
 
-    print_box_line(line, inner_width)
-    local continuation_prefix = "  "
-    for _, wrapped_line in ipairs(wrap_text(value_text, inner_width - get_visible_len(continuation_prefix))) do
-        print_box_line(continuation_prefix .. value_color .. wrapped_line .. colors.reset, inner_width)
+    local continuation_fill = pipe_pos
+    for i = 2, #wrapped_lines do
+        local continuation = string.rep(" ", continuation_fill) .. separator .. value_color .. wrapped_lines[i] .. colors.reset
+        print_box_line(continuation, inner_width)
+    end
+end
+
+local function print_box_text_block(text, color, inner_width)
+    local content_width = inner_width - 4
+    if content_width < 1 then content_width = inner_width end
+
+    for _, line in ipairs(process_text_lines(text)) do
+        local stripped = tostring(line):gsub("^%s+", ""):gsub("%s+$", "")
+        if stripped:match("^=+$") or stripped:match("^%-+$") then
+            print_box_line("  " .. color .. string.rep(stripped:sub(1, 1), content_width) .. colors.reset, inner_width)
+        elseif line == "" then
+            print_box_line("", inner_width)
+        else
+            for _, wrapped_line in ipairs(wrap_text(line, content_width)) do
+                print_box_line("  " .. color .. wrapped_line .. colors.reset, inner_width)
+            end
+        end
     end
 end
 
@@ -298,7 +313,12 @@ function M.status(label, success, details)
     
     local display_label = utf8_truncate(label, max_label_len)
     local left_part = "  " .. icon .. " " .. colors.white .. display_label
-    render_pair(left_part, pipe_pos, details, colors.cyan, inner_width)
+    if details ~= nil and tostring(details):find("\n", 1, true) then
+        render_pair(left_part, pipe_pos, nil, colors.cyan, inner_width)
+        print_box_text_block(details, colors.cyan, inner_width)
+    else
+        render_pair(left_part, pipe_pos, details, colors.cyan, inner_width)
+    end
 
     if not M.drawing_box then
         print(colors.bold .. colors.cyan .. "╰" .. string.rep("─", inner_width) .. "╯" .. colors.reset)

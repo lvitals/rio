@@ -18,9 +18,6 @@ dependencies = {
    "lpeg",
    "lua-cjson",
    "luasec",
-   "luasql-mysql",
-   "luasql-postgres",
-   "luasql-sqlite3",
    "net-url",
    "busted",
    "linenoise"
@@ -28,15 +25,6 @@ dependencies = {
 external_dependencies = {
    OPENSSL = {
       header = "openssl/evp.h"
-   },
-   SQLITE = {
-      header = "sqlite3.h"
-   },
-   MYSQL = {
-      header = "mysql.h"
-   },
-   POSTGRESQL = {
-      header = "libpq-fe.h"
    }
 }
 build = {
@@ -59,6 +47,7 @@ build = {
       ["rio.core.response"] = "lib/rio/core/response.lua",
       ["rio.core.router"] = "lib/rio/core/router.lua",
       ["rio.database.manager"] = "lib/rio/database/manager.lua",
+      ["rio.database.drivers"] = "lib/rio/database/drivers.lua",
       ["rio.database.migrate"] = "lib/rio/database/migrate.lua",
       ["rio.database.model"] = "lib/rio/database/model.lua",
       ["rio.database.query_builder"] = "lib/rio/database/query_builder.lua",

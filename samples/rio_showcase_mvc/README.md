@@ -34,7 +34,7 @@ A full-featured Model-View-Controller (MVC) application built with the **Rio Fra
 ### 1. Prerequisites
 Ensure you have the Rio Framework and the SQLite3 driver installed:
 ```bash
-luarocks install luasql-sqlite3 --local
+rio db:install sqlite
 ```
 
 ### 2. Setup the Database
