@@ -225,7 +225,7 @@ end
 -- Custom REPL logic to support automatic pretty-printing
 local function start_repl()
     local string_utils = require("rio.utils.string")
-    local linenoise_ok, linenoise = pcall(require, "linenoise")
+    local line_editor_ok, line_editor = pcall(require, "bestline")
     local env_name = ']] .. env .. [['
     
     -- Prompt colors based on environment
@@ -240,9 +240,9 @@ local function start_repl()
     
     _G._history = {}
     
-    if linenoise_ok then
+    if line_editor_ok then
         -- Standard Tab completion (Compatible with 0.9+)
-        linenoise.setcompletion(function(c, s)
+        line_editor.setcompletion(function(c, s)
             local completions = {}
             local seen = {}
             
@@ -278,20 +278,20 @@ local function start_repl()
             table.sort(completions)
             for _, cmd in ipairs(completions) do
                 -- Use completion:add syntax as in the example
-                if c.add then c:add(cmd) else linenoise.addcompletion(c, cmd) end
+                if c.add then c:add(cmd) else line_editor.addcompletion(c, cmd) end
             end
         end)
 
-        if linenoise.enableutf8 then linenoise.enableutf8(1) end
+        if line_editor.enableutf8 then line_editor.enableutf8(1) end
     end
     
     print(string.format("Rio console (%s) ready. Type 'exit' or Ctrl+D to quit.", env_name))
     
     while true do
         local input, err
-        if linenoise_ok then
-            -- Use the standard function name from example
-            input, err = linenoise.linenoise(prompt)
+        if line_editor_ok then
+            local read_line = line_editor.line or line_editor.bestline
+            input, err = read_line(prompt)
             
             if not input and err and err ~= "" then
                 print("\27[31mError: " .. tostring(err) .. "\27[0m")
@@ -315,8 +315,8 @@ local function start_repl()
         if input ~= "" then
             -- Record history in memory
             table.insert(_G._history, input)
-            if linenoise_ok then
-                linenoise.historyadd(input)
+            if line_editor_ok then
+                line_editor.historyadd(input)
             end
 
             -- Try to load with 'return ' prefix first for expressions

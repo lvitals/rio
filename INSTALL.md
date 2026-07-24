@@ -10,6 +10,7 @@ Before installing Rio, you need to have the following software installed on your
 - **LuaRocks** (the package manager for Lua modules)
 - **C compiler** (like `gcc`) and build tools (like `make`)
 - **LuaFileSystem (`luafilesystem`)** is a Rio runtime dependency and is installed automatically by LuaRocks.
+- **Bestline (`bestline`)** is used by `rio console` and is installed automatically by LuaRocks when available in your configured rock servers.
 - **Database libraries only when installing a database driver:**
   - **SQLite3:** `sqlite3.h` and `libsqlite3`
   - **MySQL/MariaDB:** `mysql.h` and a MySQL/MariaDB client library
@@ -24,6 +25,12 @@ This happens during the installation of `cqueues`. Install `m4` with your operat
 
 ### "openssl/evp.h: No such file or directory"
 This happens during the installation of `luaossl` or `luasec`. Install OpenSSL development headers with your operating system package manager, then rerun the LuaRocks command.
+
+### "No results matching query were found for bestline"
+If `bestline` is not available in your configured LuaRocks servers yet, install it from its upstream rockspec before installing Rio:
+```bash
+luarocks install https://raw.githubusercontent.com/lvitals/lua-bestline/main/bestline-scm-1.rockspec
+```
 
 ### "Database driver installation fails"
 If a LuaSQL driver fails to install, ensure you have the matching database client headers and library installed (see Prerequisites). When headers are installed in a non-default directory, pass the include/library paths through LuaRocks variables:

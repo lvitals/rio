@@ -21,7 +21,7 @@ dependencies = {
    "luafilesystem",
    "net-url",
    "busted",
-   "linenoise"
+   "bestline"
 }
 external_dependencies = {
    OPENSSL = {

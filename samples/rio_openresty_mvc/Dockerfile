@@ -15,7 +15,7 @@ RUN luarocks install lua-cjson
 RUN luarocks install luasec
 RUN luarocks install net-url
 RUN luarocks install busted
-RUN luarocks install linenoise
+RUN luarocks install https://raw.githubusercontent.com/lvitals/lua-bestline/main/bestline-scm-1.rockspec
 
 # 1. First, install the framework from local source
 WORKDIR /framework
