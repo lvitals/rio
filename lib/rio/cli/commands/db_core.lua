@@ -162,18 +162,94 @@ function M.new(ctx)
         end
         return false
     end
+
+    local function add_luarocks_variable(args, name, value)
+        if not value or value == "" or has_luarocks_variable(args, name) then
+            return false
+        end
+        local arg = name .. "=" .. value
+        if not is_safe_luarocks_arg(arg) then
+            return false
+        end
+        table.insert(args, arg)
+        return true
+    end
+
+    local function parse_luarocks_variable(arg)
+        local name, value = tostring(arg):match("^([%w_]+)=(.+)$")
+        return name, value
+    end
+
+    local function shell_capture(command)
+        if type(command) ~= "string" or command == "" then return nil end
+        local handle = io.popen(command .. " 2>/dev/null", "r")
+        if not handle then return nil end
+        local output = handle:read("*a")
+        handle:close()
+        output = output and output:gsub("%s+$", "") or nil
+        if output == "" then return nil end
+        return output
+    end
+
+    local function extract_flag_value(output, flag)
+        if not output then return nil end
+        if not flag then
+            return output:match("^%s*(.-)%s*$")
+        end
+        for token in output:gmatch("%S+") do
+            local value = token:match("^" .. flag:gsub("%-", "%%-") .. "(.+)$")
+            if value and value ~= "" then
+                return value
+            end
+        end
+        return nil
+    end
+
+    local function normalize_build_args(spec, opts)
+        opts.extra_args = opts.extra_args or {}
+
+        local function find_header_dir(root, header)
+            if not root or not header then return nil end
+            if file_exists(root .. "/" .. header) then return root end
+            for _, path in ipairs(files.find(root, { pattern = header .. "$" })) do
+                local dir = path:match("^(.*)[/\\][^/\\]+$")
+                if dir then return dir end
+            end
+            return nil
+        end
+
+        for index, arg in ipairs(opts.extra_args) do
+            local name, value = parse_luarocks_variable(arg)
+            if name == "MYSQL_DIR" and value then
+                local header_dir = find_header_dir(value, "mysql.h")
+                if value:match("[/\\]include$") or header_dir then
+                    opts.extra_args[index] = "MYSQL_INCDIR=" .. (header_dir or value)
+                    ui.info("Using MYSQL_INCDIR because MYSQL_DIR appends an extra /include.")
+                elseif file_exists(value .. "/mysql.h") then
+                    opts.extra_args[index] = "MYSQL_INCDIR=" .. value
+                    ui.info("Using MYSQL_INCDIR because the value points directly at mysql.h.")
+                end
+            elseif name == "PGSQL_DIR" and value then
+                local header_dir = find_header_dir(value, "libpq-fe.h")
+                if value:match("[/\\]include$") or header_dir then
+                    opts.extra_args[index] = "PGSQL_INCDIR=" .. (header_dir or value)
+                    ui.info("Using PGSQL_INCDIR because PGSQL_DIR appends an extra /include.")
+                elseif file_exists(value .. "/libpq-fe.h") then
+                    opts.extra_args[index] = "PGSQL_INCDIR=" .. value
+                    ui.info("Using PGSQL_INCDIR because the value points directly at libpq-fe.h.")
+                end
+            end
+        end
+    end
     
     local function add_detected_build_variables(spec, opts)
         opts.extra_args = opts.extra_args or {}
-    
-        for _, var in ipairs(spec.build_variables or {}) do
-            if not has_luarocks_variable(opts.extra_args, var.name) then
-                for _, candidate in ipairs(var.candidates or {}) do
-                    if file_exists(candidate .. "/" .. var.header) then
-                        table.insert(opts.extra_args, var.name .. "=" .. candidate)
-                        break
-                    end
-                end
+
+        for _, tool in ipairs(spec.config_tools or {}) do
+            if not has_luarocks_variable(opts.extra_args, tool.variable) then
+                local output = shell_capture(tool.command)
+                local value = extract_flag_value(output, tool.flag)
+                add_luarocks_variable(opts.extra_args, tool.variable, value)
             end
         end
     end
@@ -261,6 +337,7 @@ function M.new(ctx)
         if not explicit_tree then
             opts.tree = db_drivers.infer_tree_from_cpath(package.cpath)
         end
+        normalize_build_args(spec, opts)
         add_detected_build_variables(spec, opts)
     
         ui.header("Database Driver Install")
@@ -280,7 +357,9 @@ function M.new(ctx)
     
         if not ok then
             ui.status("Database driver install", false, "LuaRocks could not install " .. spec.rock)
-            ui.info("Install the native package listed above, then run the same command again.")
+            ui.info("Install the native dependency listed above, then run the same command again.")
+            ui.info("Rio uses mysql_config, mariadb_config or pg_config when available.")
+            ui.info("For custom paths, pass LuaRocks variables such as MYSQL_INCDIR=/path/that/contains/mysql.h and MYSQL_LIBDIR=/path/to/libs.")
             return
         end
     

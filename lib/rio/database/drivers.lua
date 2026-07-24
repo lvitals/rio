@@ -24,6 +24,31 @@ local specs = {
             {
                 name = "MYSQL_INCDIR",
                 header = "mysql.h"
+            },
+            {
+                name = "MYSQL_LIBDIR"
+            }
+        },
+        config_tools = {
+            {
+                command = "mysql_config --include",
+                variable = "MYSQL_INCDIR",
+                flag = "-I"
+            },
+            {
+                command = "mysql_config --libs",
+                variable = "MYSQL_LIBDIR",
+                flag = "-L"
+            },
+            {
+                command = "mariadb_config --include",
+                variable = "MYSQL_INCDIR",
+                flag = "-I"
+            },
+            {
+                command = "mariadb_config --libs",
+                variable = "MYSQL_LIBDIR",
+                flag = "-L"
             }
         }
     },
@@ -38,6 +63,19 @@ local specs = {
             {
                 name = "PGSQL_INCDIR",
                 header = "libpq-fe.h"
+            },
+            {
+                name = "PGSQL_LIBDIR"
+            }
+        },
+        config_tools = {
+            {
+                command = "pg_config --includedir",
+                variable = "PGSQL_INCDIR"
+            },
+            {
+                command = "pg_config --libdir",
+                variable = "PGSQL_LIBDIR"
             }
         }
     }

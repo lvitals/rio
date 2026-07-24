@@ -28,8 +28,9 @@ This happens during the installation of `luaossl` or `luasec`. Install OpenSSL d
 ### "Database driver installation fails"
 If a LuaSQL driver fails to install, ensure you have the matching database client headers and library installed (see Prerequisites). When headers are installed in a non-default directory, pass the include/library paths through LuaRocks variables:
 ```bash
-rio db:install mysql MYSQL_INCDIR=/usr/include/mysql MYSQL_LIBDIR=/usr/lib
+rio db:install mysql MYSQL_INCDIR=/path/that/contains/mysql.h MYSQL_LIBDIR=/path/to/mysql/libs
 ```
+Rio also tries portable client config tools such as `mysql_config`, `mariadb_config`, and `pg_config` when they are available.
 
 ## Install Rio Framework
 
