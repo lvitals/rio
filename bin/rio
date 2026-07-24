@@ -4,11 +4,18 @@
 --
 -- Main command-line interface for the Rio framework.
 
+local lfs = require("lfs")
+
+local function absolute_path(path)
+    if path:match("^/") or path:match("^%a:[/\\]") then
+        return path
+    end
+    return (lfs.currentdir() .. "/" .. path):gsub("/%./", "/")
+end
+
 -- Get the absolute directory of the currently executing script
 local script_path = debug.getinfo(1, "S").source:sub(2)
-local handle = io.popen("realpath " .. script_path)
-local absolute_script_path = handle:read("*l")
-handle:close()
+local absolute_script_path = absolute_path(script_path)
 
 local script_dir = absolute_script_path:match("(.*/)") or "./"
 -- In a typical installation, the bin/ is a sibling of lib/

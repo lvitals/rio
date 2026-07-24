@@ -52,13 +52,11 @@ function M.run(ctx, console_options)
     
     -- Gather models
     local models = {}
-    local handle = io.popen("ls app/models/*.lua 2>/dev/null")
-    if handle then
-        for line in handle:lines() do
-            local m = line:match("([^/]+)%.lua$")
-            if m then table.insert(models, m) end
+    for _, path in ipairs(ctx.files.list("app/models", { mode = "file", pattern = "%.lua$" })) do
+        local model = ctx.files.basename(path):match("(.+)%.lua$")
+        if model then
+            table.insert(models, model)
         end
-        handle:close()
     end
 
     local temp_bootstrap_file = "rio_console_bootstrap.lua"
@@ -131,17 +129,16 @@ local function _reload()
         end
     end
     -- Re-require models
-    local handle = io.popen("ls app/models/*.lua 2>/dev/null")
-    if handle then
-        for line in handle:lines() do
-            local m = line:match("([^/]+)%.lua$")
+    local ok_lfs, lfs = pcall(require, "lfs")
+    if ok_lfs and lfs.attributes("app/models", "mode") == "directory" then
+        for file in lfs.dir("app/models") do
+            local m = file:match("(.+)%.lua$")
             if m then
                 local string_utils = require("rio.utils.string")
                 local class_name = string_utils.camel_case(m)
                 _G[class_name] = require("app.models." .. m)
             end
         end
-        handle:close()
     end
     print("Done.")
 end
@@ -210,7 +207,7 @@ history = setmetatable({
         return ""
     end
 })
-clear = make_callable_without_parens(function() os.execute("clear") end)
+clear = make_callable_without_parens(function() io.write("\27[2J\27[H") end)
 
 -- Generators
 generate = function(type, name, ...)
@@ -389,7 +386,6 @@ os.exit()
 ]])
 
     -- Set environment variables for the current process
-    os.execute(string.format("export RIO_ENV='%s'", env))
     package.path = effective_lua_path
     package.cpath = effective_lua_cpath
 

@@ -329,7 +329,6 @@ function SQLiteAdapter:create_database(db_config)
         local f, err = io.open(db_file, "a")
         if f then
             f:close()
-            os.execute("chmod 664 " .. db_file .. " 2>/dev/null")
             return true
         else
             return false, (err or "Could not create database file")

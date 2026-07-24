@@ -60,13 +60,11 @@ function M.run(ctx, runner_options, code_or_file, script_args)
 
     if not skip_executor then
         local models = {}
-        local handle = io.popen("ls app/models/*.lua 2>/dev/null")
-        if handle then
-            for line in handle:lines() do
-                local model = line:match("([^/]+)%.lua$")
-                if model then table.insert(models, model) end
+        for _, path in ipairs(ctx.files.list("app/models", { mode = "file", pattern = "%.lua$" })) do
+            local model = ctx.files.basename(path):match("(.+)%.lua$")
+            if model then
+                table.insert(models, model)
             end
-            handle:close()
         end
 
         local bootstrap_content = {

@@ -2,6 +2,7 @@
 
 local Command = require("rio.cli.command")
 local string_utils = require("rio.utils.string")
+local files = require("rio.cli.files")
 
 local M = {}
 local underscore = string_utils.underscore
@@ -51,15 +52,11 @@ function M.model(model_name)
 
     local migration_pattern = "_create_" .. pluralize(underscored_model_name) .. ".lua"
     local found_migration_path = nil
-    local handle = io.popen("ls db/migrate", "r")
-    if handle then
-        for line in handle:lines() do
-            if line:match(migration_pattern) then
-                found_migration_path = "db/migrate/" .. line
-                break
-            end
+    for _, path in ipairs(files.list("db/migrate", { mode = "file" })) do
+        if files.basename(path):match(migration_pattern) then
+            found_migration_path = path
+            break
         end
-        handle:close()
     end
 
     if found_migration_path then
@@ -77,15 +74,11 @@ end
 function M.migration(migration_name)
     local migration_pattern = "_" .. underscore(migration_name) .. ".lua"
     local found_migration_path = nil
-    local handle = io.popen("ls db/migrate", "r")
-    if handle then
-        for line in handle:lines() do
-            if line:match(migration_pattern) then
-                found_migration_path = "db/migrate/" .. line
-                break
-            end
+    for _, path in ipairs(files.list("db/migrate", { mode = "file" })) do
+        if files.basename(path):match(migration_pattern) then
+            found_migration_path = path
+            break
         end
-        handle:close()
     end
 
     if found_migration_path then

@@ -4,6 +4,7 @@
 local DB = require("rio.database.manager")
 local ui = require("rio.utils.ui")
 local colors = ui.colors
+local files = require("rio.cli.files")
 
 local function print_header(text)
     if DB.verbose then ui.header(text) end
@@ -53,23 +54,15 @@ function Migrate.run()
     -- Executed migrations
     local executed = adapter.get_executed_migrations(conn)
     
-    -- List files
-    local handle = io.popen('ls db/migrate/*.lua 2>/dev/null | sort')
-    if not handle then
-        print_info("No migrations found in db/migrate/")
-        return
-    end
-    local files_str = handle:read("*a")
-    handle:close()
-    
-    if not files_str or files_str == "" then
+    local migration_files = files.list("db/migrate", { mode = "file", pattern = "%.lua$" })
+    if #migration_files == 0 then
         print_info("No migrations found in db/migrate/")
         return
     end
     
     local pending = 0
-    for file in files_str:gmatch("[^\r\n]+") do
-        local name = file:match("db/migrate/(.+)%.lua$")
+    for _, file in ipairs(migration_files) do
+        local name = files.basename(file):match("(.+)%.lua$")
         if name and not executed[name] then
             repeat -- Emulate continue
                 pending = pending + 1
@@ -163,14 +156,12 @@ function Migrate.status()
     local adapter = DB.get_adapter()
 
     local executed = adapter.get_executed_migrations(conn)
-    local handle = io.popen('ls db/migrate/*.lua 2>/dev/null | sort')
-    local files_str = handle and handle:read("*a") or ""
-    if handle then handle:close() end
+    local migration_files = files.list("db/migrate", { mode = "file", pattern = "%.lua$" })
     
     print(string.format("%-10s %s", "Status", "Migration"))
     print(string.rep("-", 80))
-    for file in files_str:gmatch("[^\r\n]+") do
-        local name = file:match("db/migrate/(.+)%.lua$")
+    for _, file in ipairs(migration_files) do
+        local name = files.basename(file):match("(.+)%.lua$")
         if name then
             if executed[name] then print(string.format("%sUp%s   %s", colors.green, colors.reset, name))
             else print(string.format("%sDown%s %s", colors.red, colors.reset, name)) end

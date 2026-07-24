@@ -138,7 +138,7 @@ describe("Rio CLI Functional Commands", function()
         assert.is_true(helpers.exists(project_root .. "/app/models/product.lua"))
         assert.is_true(helpers.exists(project_root .. "/app/channels/chat_channel.lua"))
 
-        os.execute("mkdir -p " .. helpers.shell_quote(project_root .. "/app/middleware"))
+        helpers.mkdir_p(project_root .. "/app/middleware")
         helpers.write(project_root .. "/app/middleware/audit_middleware.lua", [[
 return {
     name = "audit",
@@ -175,7 +175,7 @@ return {
         assert.is_false(helpers.exists(project_root .. "/app/controllers/reports_controller.lua"))
         assert.is_false(helpers.exists(project_root .. "/app/models/product.lua"))
 
-        os.execute("rm -rf " .. helpers.shell_quote(root))
+        helpers.remove_tree(root)
     end)
 
     it("keeps ui:test available for rio.ui diagnostics", function()

@@ -2,6 +2,7 @@
 -- Database command implementation for Rio CLI.
 
 local M = {}
+local files = require("rio.cli.files")
 
 function M.new(ctx)
     local ui = ctx.ui
@@ -79,7 +80,7 @@ function M.new(ctx)
         
         local project_name = "rio_app"
         -- Try to guess project name from current directory
-        local current_dir = io.popen("basename $(pwd)"):read("*l")
+        local current_dir = files.basename(files.current_dir())
         if current_dir then project_name = current_dir end
         
         local content = generate_database_content(adapter, project_name, config)
@@ -605,7 +606,7 @@ function M.new(ctx)
         end
     
         local project_name = "rio_app"
-        local current_dir = io.popen("basename $(pwd)"):read("*l")
+        local current_dir = files.basename(files.current_dir())
         if current_dir then project_name = current_dir end
     
         local config = {}
@@ -655,7 +656,7 @@ function M.new(ctx)
             app.cache:clear()
             ui.status("Database cache", true, "Cleared")
         else
-            os.execute("rm -f tmp/cache/*.cache")
+            files.remove_matching("tmp/cache", "%.cache$")
             ui.status("Database cache", true, "Cache directory cleared manually")
         end
     end

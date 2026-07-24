@@ -18,6 +18,7 @@ dependencies = {
    "lpeg",
    "lua-cjson",
    "luasec",
+   "luafilesystem",
    "net-url",
    "busted",
    "linenoise"

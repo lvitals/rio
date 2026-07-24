@@ -23,22 +23,19 @@ end
 local function clear_dir(path)
     print("Clearing " .. path .. "...")
     if path == "tmp/pids" then
-        local handle = io.popen("ls tmp/pids/*.pid 2>/dev/null")
-        if handle then
-            for pid_file in handle:lines() do
-                stop_server_by_pid(pid_file)
-            end
-            handle:close()
+        for _, pid_file in ipairs(require("rio.cli.files").list("tmp/pids", { mode = "file", pattern = "%.pid$" })) do
+            stop_server_by_pid(pid_file)
         end
     else
-        os.execute("rm -rf " .. path .. "/*")
+        require("rio.cli.files").clear_dir(path)
     end
 end
 
 local function create_tmp_dirs()
     print("Creating tmp directories...")
+    local files = require("rio.cli.files")
     for _, dir in ipairs(TMP_DIRS) do
-        os.execute("mkdir -p " .. dir)
+        files.ensure_dir(dir)
         print("  Created " .. dir)
     end
 end

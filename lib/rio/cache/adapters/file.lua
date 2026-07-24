@@ -3,13 +3,14 @@
 
 local Base = require("rio.cache.adapters.base")
 local string_utils = require("rio.utils.string")
+local files = require("rio.cli.files")
 local FileAdapter = setmetatable({}, Base)
 FileAdapter.__index = FileAdapter
 
 function FileAdapter:new(options)
     local obj = Base:new(options)
     obj.cache_dir = options.dir or "tmp/cache"
-    os.execute("mkdir -p " .. obj.cache_dir)
+    files.ensure_dir(obj.cache_dir)
     return setmetatable(obj, self)
 end
 
@@ -60,7 +61,7 @@ function FileAdapter:delete(key)
 end
 
 function FileAdapter:clear()
-    os.execute("rm -f " .. self.cache_dir .. "/*.cache")
+    files.remove_matching(self.cache_dir, "%.cache$")
 end
 
 function FileAdapter:exists(key)

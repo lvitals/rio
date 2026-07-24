@@ -1,4 +1,6 @@
 local M = {}
+local lfs = require("lfs")
+local files = require("rio.cli.files")
 
 function M.strip_ansi(value)
     return tostring(value or ""):gsub("\27%[[%d;?]*[mKhlABCDEFGJKST]", "")
@@ -44,10 +46,7 @@ function M.run(command, cwd)
 end
 
 function M.repo_root()
-    local handle = assert(io.popen("pwd", "r"))
-    local cwd = handle:read("*l")
-    handle:close()
-    return cwd
+    return assert(lfs.currentdir())
 end
 
 function M.bin_path()
@@ -58,9 +57,17 @@ function M.tmpdir(name)
     local base = os.getenv("TMPDIR") or "/tmp"
     local pid = tostring({}):match("0x(.+)$") or tostring(os.time())
     local path = base .. "/" .. name .. "_" .. pid
-    os.execute("rm -rf " .. M.shell_quote(path))
-    os.execute("mkdir -p " .. M.shell_quote(path))
+    files.remove_tree(path)
+    files.ensure_dir(path)
     return path
+end
+
+function M.mkdir_p(path)
+    return files.ensure_dir(path)
+end
+
+function M.remove_tree(path)
+    return files.remove_tree(path)
 end
 
 function M.write(path, content)

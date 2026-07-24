@@ -9,6 +9,7 @@ Before installing Rio, you need to have the following software installed on your
 - **Lua 5.1, 5.2, 5.3, or 5.4**
 - **LuaRocks** (the package manager for Lua modules)
 - **C compiler** (like `gcc`) and build tools (like `make`)
+- **LuaFileSystem (`luafilesystem`)** is a Rio runtime dependency and is installed automatically by LuaRocks.
 - **Database libraries only when installing a database driver:**
   - **SQLite3:** `sqlite3.h` and `libsqlite3`
   - **MySQL/MariaDB:** `mysql.h` and a MySQL/MariaDB client library

@@ -8,19 +8,16 @@ function M.run(ctx)
     ctx.ui.header("Application Initializers")
 
     local initializers_dir = "config/initializers"
-    local handle = io.popen("ls " .. initializers_dir .. "/*.lua 2>/dev/null")
+    local initializers = ctx.files.list(initializers_dir, { mode = "file", pattern = "%.lua$" })
     local count = 0
 
     ctx.ui.box("Loaded Initializers", function()
-        if handle then
-            for file in handle:lines() do
-                local name = file:match("([^/]+)$")
-                if name then
-                    count = count + 1
-                    ctx.ui.row(string.format("%02d", count), name)
-                end
+        for _, file in ipairs(initializers) do
+            local name = ctx.files.basename(file)
+            if name then
+                count = count + 1
+                ctx.ui.row(string.format("%02d", count), name)
             end
-            handle:close()
         end
 
         if count == 0 then

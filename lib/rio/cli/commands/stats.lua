@@ -63,20 +63,14 @@ local function scan_dir(cat_name, dir_path, pattern)
         end
     end
 
-    local handle = io.popen("find " .. dir_path .. " -type f 2>/dev/null")
-    if handle then
-        for file in handle:lines() do
-            if file:match(pattern) then
-                local l, lc, m = analyze_file(file)
-                total_lines = total_lines + l
-                total_loc = total_loc + lc
-                total_methods = total_methods + m
-                if cat_name ~= "Middlewares" then
-                    total_files = total_files + 1
-                end
-            end
+    for _, file in ipairs(require("rio.cli.files").find(dir_path, { pattern = pattern })) do
+        local l, lc, m = analyze_file(file)
+        total_lines = total_lines + l
+        total_loc = total_loc + lc
+        total_methods = total_methods + m
+        if cat_name ~= "Middlewares" then
+            total_files = total_files + 1
         end
-        handle:close()
     end
 
     return total_lines, total_loc, total_methods, total_files

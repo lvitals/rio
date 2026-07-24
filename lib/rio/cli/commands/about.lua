@@ -29,9 +29,7 @@ function M.run(ctx)
         middleware_str = table.concat(mw_config, ", ")
     end
 
-    local cwd_handle = io.popen("pwd")
-    local app_root = cwd_handle and cwd_handle:read("*l") or "."
-    if cwd_handle then cwd_handle:close() end
+    local app_root = ctx.files.current_dir() or "."
 
     local environment = os.getenv("RIO_ENV") or "development"
 

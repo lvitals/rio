@@ -105,14 +105,9 @@ function M.new(ctx)
     local function generate_migration(migration_name, fields, table_name_hint)
         -- Check if migration already exists
         local underscored_name = underscore(migration_name)
-        local handle_check = io.popen("ls db/migrate/*_" .. underscored_name .. ".lua 2>/dev/null")
-        if handle_check then
-            local existing = handle_check:read("*l")
-            handle_check:close()
-            if existing and existing ~= "" then
+        for _, existing in ipairs(require("rio.cli.files").list("db/migrate", { mode = "file", pattern = "_" .. underscored_name .. "%.lua$" })) do
                 ui.warn("Migration '" .. migration_name .. "' already exists at " .. existing)
                 return existing:match("db/migrate/(.+)")
-            end
         end
     
         local timestamp = os.date("%Y%m%d%H%M%S")

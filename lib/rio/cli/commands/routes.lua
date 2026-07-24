@@ -177,9 +177,7 @@ function M.run(ctx, options)
     local original_package_cpath = package.cpath
 
     if not ctx.files.exists("config/routes.lua") then
-        local cwd_handle = io.popen("pwd")
-        local cwd = cwd_handle and cwd_handle:read("*l") or "."
-        if cwd_handle then cwd_handle:close() end
+        local cwd = ctx.files.current_dir() or "."
 
         ctx.ui.status("Routes", false, "config/routes.lua was not found")
         ctx.ui.box("Project Directory", function()

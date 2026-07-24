@@ -106,26 +106,18 @@ function M.list(ctx)
     local available = {}
     local framework_base = ctx.framework_lib_path:match("([^;]+)"):gsub("%?%.lua", ""):gsub("%?$", "")
     local core_mw_path = framework_base .. "rio/middleware"
-    local handle = io.popen("ls " .. core_mw_path .. "/*.lua 2>/dev/null")
-    if handle then
-        for file in handle:lines() do
-            local mw_name = file:match("([^/]+)%.lua$")
-            if mw_name then
-                table.insert(available, { name = mw_name, type = "core" })
-            end
+    for _, file in ipairs(ctx.files.list(core_mw_path, { mode = "file", pattern = "%.lua$" })) do
+        local mw_name = file:match("([^/\\]+)%.lua$")
+        if mw_name then
+            table.insert(available, { name = mw_name, type = "core" })
         end
-        handle:close()
     end
 
-    handle = io.popen("ls app/middleware/*.lua 2>/dev/null")
-    if handle then
-        for file in handle:lines() do
-            local mw_name = file:match("([^/]+)%.lua$")
-            if mw_name then
-                table.insert(available, { name = mw_name, type = "local" })
-            end
+    for _, file in ipairs(ctx.files.list("app/middleware", { mode = "file", pattern = "%.lua$" })) do
+        local mw_name = file:match("([^/\\]+)%.lua$")
+        if mw_name then
+            table.insert(available, { name = mw_name, type = "local" })
         end
-        handle:close()
     end
 
     table.sort(available, function(a, b) return a.name < b.name end)

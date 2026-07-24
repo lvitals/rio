@@ -60,6 +60,7 @@ Rio database drivers are optional. Installing the framework no longer requires M
 ```bash
 luarocks install rio-dev-1.rockspec --local
 ```
+LuaRocks installs Rio runtime dependencies automatically, including `luafilesystem` for portable file and directory operations.
 
 Install the database driver only when a project needs it:
 ```bash
