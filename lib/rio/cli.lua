@@ -65,6 +65,15 @@ local function write_file_content(path, content)
     end
 end
 
+local function file_exists(path)
+    local file = io.open(path, "r")
+    if file then
+        file:close()
+        return true
+    end
+    return false
+end
+
 local function set_executable_permission(path)
     os.execute("chmod +x " .. path)
 end
@@ -2138,15 +2147,6 @@ local function is_safe_luarocks_arg(arg)
         and arg:match("^[%w_%.%-%+/=:@]+$") ~= nil
 end
 
-local function file_exists(path)
-    local file = io.open(path, "r")
-    if file then
-        file:close()
-        return true
-    end
-    return false
-end
-
 local function has_luarocks_variable(args, name)
     for _, arg in ipairs(args or {}) do
         if tostring(arg):match("^" .. name .. "=") then
@@ -2715,11 +2715,25 @@ end
 
 local function run_routes(options)
     options = options or {}
-    print("Listing defined routes...")
+    ui.header("Routes")
     
     local effective_lua_path, effective_lua_cpath = get_lua_paths()
     local original_package_path = package.path
     local original_package_cpath = package.cpath
+
+    if not file_exists("config/routes.lua") then
+        local cwd_handle = io.popen("pwd")
+        local cwd = cwd_handle and cwd_handle:read("*l") or "."
+        if cwd_handle then cwd_handle:close() end
+
+        ui.status("Routes", false, "config/routes.lua was not found")
+        ui.box("Project Directory", function()
+            ui.row("Current directory", cwd)
+            ui.row("Expected file", "config/routes.lua")
+        end)
+        ui.line("Run this command from a Rio project root, or create one with: rio new <project_name>", colors.dim)
+        return
+    end
     
     -- We need to include the project directories to load config and routes
     package.path = "./?.lua;./app/?.lua;./app/?/init.lua;./config/?.lua;./lib/?.lua;" .. rio_framework_lib_path_global .. ";" .. effective_lua_path .. ";" .. original_package_path
@@ -2727,7 +2741,7 @@ local function run_routes(options)
 
     local ok, rio = pcall(require, "rio")
     if not ok then
-        print("Error: Could not load 'rio' framework: " .. tostring(rio))
+        ui.status("Routes", false, "Could not load 'rio' framework: " .. tostring(rio))
         package.path = original_package_path
         package.cpath = original_package_cpath
         return
@@ -2746,7 +2760,8 @@ local function run_routes(options)
 
     local ok_routes, routes_fn = pcall(require, "config.routes")
     if not ok_routes then
-        print("Error: Could not load 'config/routes.lua': " .. tostring(routes_fn))
+        ui.status("Routes", false, "Could not load config/routes.lua")
+        ui.info(tostring(routes_fn):match("^[^\n]+") or tostring(routes_fn))
         package.path = original_package_path
         package.cpath = original_package_cpath
         return
@@ -2755,7 +2770,8 @@ local function run_routes(options)
     -- Load the routes into the app instance
     local ok_exec, err_exec = pcall(routes_fn, app)
     if not ok_exec then
-        print("Error executing 'config/routes.lua': " .. tostring(err_exec))
+        ui.status("Routes", false, "Error executing config/routes.lua")
+        ui.info(tostring(err_exec))
         package.path = original_package_path
         package.cpath = original_package_cpath
         return
@@ -2869,7 +2885,7 @@ local function run_routes(options)
     end
 
     if #route_list == 0 then
-        print("No routes found matching your criteria.")
+        ui.status("Routes", false, "No routes found matching your criteria")
         package.path = original_package_path
         package.cpath = original_package_cpath
         return
@@ -2877,40 +2893,47 @@ local function run_routes(options)
 
     if options.expanded then
         for i, route in ipairs(route_list) do
-            print(string.format("--[ Route %d ]%s", i, string.rep("-", 60)))
-            print(string.format("%-20s | %s", "Prefix", route.prefix))
-            print(string.format("%-20s | %s", "Verb", route.verb))
-            print(string.format("%-20s | %s", "URI Pattern", route.uri))
-            print(string.format("%-20s | %s", "Controller#Action", route.controller))
-            print(string.format("%-20s | %s", "Source Location", route.source))
+            ui.box("Route " .. i, function()
+                ui.row("Prefix", route.prefix ~= "" and route.prefix or "-")
+                ui.row("Verb", route.verb)
+                ui.row("URI Pattern", route.uri)
+                ui.row("Controller#Action", route.controller)
+                ui.row("Source Location", route.source ~= "" and route.source or "-")
+            end)
         end
+        ui.line("Total routes: " .. #route_list, colors.dim)
     else
-        -- Calculate column widths
-        local w_prefix, w_verb, w_uri, w_ctrl = 6, 4, 10, 20
-        for _, r in ipairs(route_list) do
-            if #r.prefix > w_prefix then w_prefix = #r.prefix end
-            if #r.verb > w_verb then w_verb = #r.verb end
-            if #r.uri > w_uri then w_uri = #r.uri end
-            if #r.controller > w_ctrl then w_ctrl = #r.controller end
-        end
-        
-        local fmt = string.format("%%-%ds  %%-%ds  %%-%ds  %%s", w_prefix, w_verb, w_uri)
-        
-        print(string.format(fmt, "Prefix", "Verb", "URI Pattern", "Controller#Action"))
-        -- print(string.rep("-", w_prefix + w_verb + w_uri + w_ctrl + 6))
-        
-        for _, r in ipairs(route_list) do
-            print(string.format(fmt, r.prefix, r.verb, r.uri, r.controller))
-        end
+        ui.box("Defined Routes", function()
+            local function fit(value, width)
+                value = tostring(value or "")
+                if #value <= width then return value end
+                if width <= 3 then return value:sub(1, width) end
+                return value:sub(1, width - 3) .. "..."
+            end
+
+            local fmt = "%-8s  %-6s  %-30s  %-24s"
+            ui.text(string.format(fmt, "Prefix", "Verb", "URI Pattern", "Controller#Action"), colors.bold .. colors.white)
+            ui.text(string.format(fmt, string.rep("-", 8), string.rep("-", 6), string.rep("-", 30), string.rep("-", 24)), colors.dim)
+
+            for _, r in ipairs(route_list) do
+                ui.text(string.format(
+                    fmt,
+                    fit(r.prefix ~= "" and r.prefix or "-", 8),
+                    fit(r.verb, 6),
+                    fit(r.uri, 30),
+                    fit(r.controller, 24)
+                ), colors.white)
+            end
+        end)
+        ui.line("Total routes: " .. #route_list, colors.dim)
     end
-    print("")
 
     package.path = original_package_path
     package.cpath = original_package_cpath
 end
 
 local function run_middleware()
-    print(colors.cyan .. "Listing middlewares..." .. colors.reset)
+    ui.header("Middleware")
     
     local effective_lua_path, effective_lua_cpath = get_lua_paths()
     local original_package_path = package.path
@@ -2922,7 +2945,7 @@ local function run_middleware()
 
     local ok, rio = pcall(require, "rio")
     if not ok then
-        print(colors.red .. "Error: Could not load 'rio' framework: " .. tostring(rio) .. colors.reset)
+        ui.status("Middleware", false, "Could not load 'rio' framework: " .. tostring(rio))
         package.path = original_package_path
         package.cpath = original_package_cpath
         return
@@ -2942,26 +2965,26 @@ local function run_middleware()
     -- Load middlewares from config/middlewares.lua
     local ok_mw_config, middlewares_cfg = pcall(require, "config.middlewares")
     if ok_mw_config then
-        local ok_mw, err_mw = pcall(function() app:load_middlewares(middlewares_cfg) end)
+        local ok_mw, err_mw = pcall(function()
+            for _, middleware_name in ipairs(middlewares_cfg) do
+                app:use(middleware_name)
+            end
+        end)
         if not ok_mw then
-            print(colors.red .. "Warning: Error loading middlewares: " .. tostring(err_mw) .. colors.reset)
-            print(colors.yellow .. "Check your config/middlewares.lua for errors." .. colors.reset)
+            ui.warn("Error loading middlewares: " .. tostring(err_mw))
+            ui.info("Check your config/middlewares.lua for errors.")
         end
     end
 
-    print("\n" .. colors.bold .. "Application Middleware Stack (Active)" .. colors.reset)
-    print(string.rep("-", 85))
-    
     local active_names = {}
-    if #app.middlewares == 0 then
-        print(colors.yellow .. "  (No middleware defined)" .. colors.reset)
-    else
+    local active_rows = {}
+    if #app.middlewares > 0 then
         for _, mw_entry in ipairs(app.middlewares) do
             local mw = mw_entry.handler
-            local source_info = mw_entry.source
+            local source_info = "config/middlewares.lua"
             
             local info = debug.getinfo(mw, "Sn")
-            local name = "anonymous"
+            local name = mw_entry.name or "anonymous"
             local location = "unknown"
             
             if info then
@@ -2969,45 +2992,32 @@ local function run_middleware()
                     local src = info.short_src
                     -- Simplify Rio core middlewares (rio/middleware/logger.lua -> logger)
                     local mw_file = src:match("rio/middleware/(.+)%.lua")
-                    if mw_file then
+                    if name == "anonymous" and mw_file then
                         name = mw_file
-                    else
+                    elseif name == "anonymous" then
                         -- Custom middleware (app/middleware/auth.lua -> auth)
                         name = src:match("([^/]+)%.lua$") or src
                     end
                     location = string.format("%s:%d", src:match("([^/]+)$") or src, info.linedefined)
                 end
                 
-                if info.name and info.name ~= "" then
+                if name == "anonymous" and info.name and info.name ~= "" then
                     name = info.name
                 end
             end
             
             active_names[name] = true
 
-            -- Highlight if added in config/application.lua
-            local source_display = source_info
-            if source_info:find("application.lua") then
-                source_display = colors.bold .. colors.white .. "config/" .. source_info .. colors.reset
-            else
-                source_display = colors.yellow .. source_info .. colors.reset
-            end
-            
-            print(string.format("%suse %-20s%s %-35s %s(%s)%s", 
-                colors.green, name, colors.reset, 
-                source_display,
-                colors.blue, location, colors.reset))
+            local source_display = source_info:find("application.lua") and ("config/" .. source_info) or source_info
+            table.insert(active_rows, {
+                name = name,
+                source = source_display,
+                location = location
+            })
         end
     end
-    print(string.rep("-", 85))
-    print("Total Active: " .. #app.middlewares)
 
     -- Available Middlewares
-    print("\n" .. colors.bold .. "Available Middlewares (Core & Local)" .. colors.reset)
-    print(string.rep("-", 85))
-    print(string.format("%-18s %-12s %-20s", colors.bold .. "Status" .. colors.reset, colors.bold .. "Type" .. colors.reset, colors.bold .. "Name" .. colors.reset))
-    print(string.rep("-", 85))
-    
     local available = {}
     
     -- 1. Scan Core Middlewares
@@ -3039,27 +3049,39 @@ local function run_middleware()
 
     table.sort(available, function(a, b) return a.name < b.name end)
 
-    for _, mw in ipairs(available) do
-        local status_text = active_names[mw.name] and "ACTIVE" or "NOT USED"
-        local status_color = active_names[mw.name] and colors.green or colors.yellow
-        local status = status_color .. string.format("[%s]", status_text) .. colors.reset
-        
-        local type_text = mw.type == "core" and "rio" or "local"
-        local type_color = mw.type == "core" and colors.cyan or colors.magenta
-        local mw_type = type_color .. type_text .. colors.reset
-        
-        -- Try to get description
-        local description = ""
-        local mw_module_path = mw.type == "core" and ("rio.middleware." .. mw.name) or ("app.middleware." .. mw.name)
-        local ok_load, mw_mod = pcall(require, mw_module_path)
-        if ok_load and type(mw_mod) == "table" and mw_mod.description then
-            description = colors.dim .. mw_mod.description .. colors.reset
+    ui.box("Active Middleware Stack", function()
+        if #active_rows == 0 then
+            ui.info("No middleware defined.")
+        else
+            for _, row in ipairs(active_rows) do
+                ui.row(row.name, row.source .. " (" .. row.location .. ")")
+            end
         end
-        
-        print(string.format("%-27s %-21s %-20s %s", status, mw_type, colors.bold .. mw.name .. colors.reset, description))
-    end
-    print(string.rep("-", 85))
-    print("Run " .. colors.bold .. "rio middleware:use <name>" .. colors.reset .. " to enable a middleware.\n")
+        ui.row("Total active", tostring(#active_rows))
+    end)
+
+    ui.box("Available Middlewares", function()
+        if #available == 0 then
+            ui.info("No core or local middleware found.")
+            return
+        end
+
+        for _, mw in ipairs(available) do
+            local status_text = active_names[mw.name] and "active" or "available"
+            local type_text = mw.type == "core" and "rio" or "local"
+
+            local description = ""
+            local mw_module_path = mw.type == "core" and ("rio.middleware." .. mw.name) or ("app.middleware." .. mw.name)
+            local ok_load, mw_mod = pcall(require, mw_module_path)
+            if ok_load and type(mw_mod) == "table" and mw_mod.description then
+                description = " - " .. mw_mod.description
+            end
+
+            ui.row(mw.name, type_text .. " / " .. status_text .. description)
+        end
+    end)
+
+    ui.line("Enable with: rio middleware:use <name>", colors.dim)
 
     package.path = original_package_path
     package.cpath = original_package_cpath
