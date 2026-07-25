@@ -67,7 +67,7 @@ function M.new(ctx)
         table.insert(content, "")
     
         for _, action in ipairs(actions) do
-            table.insert(content, "function " .. camelControllerName .. "Controller." .. action .. "(context)")
+            table.insert(content, "function " .. camelControllerName .. "Controller:" .. action .. "(context)")
             table.insert(content, "    -- Implement " .. action .. " logic here")
             if api_only then
                 table.insert(content, "    return context:json({ message = \"Hello from " .. camelControllerName .. "#" .. action .. "!\" })")

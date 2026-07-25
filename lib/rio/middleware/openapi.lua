@@ -10,7 +10,15 @@ end
 
 local function get_path_params(path)
     local params = {}
-    for param in path:gmatch(":(%w+)") do
+    for param in path:gmatch("%{([%w_]+)%}") do
+        table.insert(params, {
+            name = param,
+            ["in"] = "path",
+            required = true,
+            schema = { type = "string" }
+        })
+    end
+    for param in path:gmatch(":([%w_]+)") do
         table.insert(params, {
             name = param,
             ["in"] = "path",
@@ -19,6 +27,16 @@ local function get_path_params(path)
         })
     end
     return params
+end
+
+local function upsert_parameter(parameters, new_param)
+    for i, existing in ipairs(parameters) do
+        if existing.name == new_param.name and existing["in"] == new_param["in"] then
+            parameters[i] = new_param
+            return
+        end
+    end
+    table.insert(parameters, new_param)
 end
 
 local M = {}
@@ -121,7 +139,6 @@ function M.create(app, options)
                                 local first_segment = route.path:match("/([^/:]+)")
                                 if first_segment then tag = first_segment:lower() end
                             end
-                            tags_found[tag] = true
 
                             local operation = {
                                 summary = (custom_meta and custom_meta.summary) or (method:upper() .. " " .. path),
@@ -172,8 +189,8 @@ function M.create(app, options)
                                 if custom_meta.responses then operation.responses = custom_meta.responses end
                                 if custom_meta.request_body then operation.requestBody = custom_meta.request_body
                                 elseif custom_meta.requestBody then operation.requestBody = custom_meta.requestBody end
-                                if custom_meta.parameters then 
-                                    for _, p in ipairs(custom_meta.parameters) do table.insert(operation.parameters, p) end
+                                if custom_meta.parameters then
+                                    for _, p in ipairs(custom_meta.parameters) do upsert_parameter(operation.parameters, p) end
                                 end
                                 if custom_meta.tags then operation.tags = custom_meta.tags end
 
@@ -193,6 +210,8 @@ function M.create(app, options)
                                     end
                                 end
                             end
+
+                            for _, t in ipairs(operation.tags) do tags_found[t] = true end
 
                             spec.paths[path][method_lower] = operation
                         end

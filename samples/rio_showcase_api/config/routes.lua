@@ -31,13 +31,18 @@ return function(app)
     end)
 
     -- API V2 (Example)
+    -- Demonstrates API versioning: same "/me" path as V1, but backed by its
+    -- own namespaced controller ("V2::Auth" -> app/controllers/v2/auth_controller.lua)
+    -- returning a different response shape (data/meta envelope + embedded profile).
+    -- Visit /docs and switch the version dropdown (or /openapi.json?v=v1 vs
+    -- ?v=v2) to see both documented side by side.
     app:group("/api/v2", function(v2)
         v2:use(authenticate)
-        
-        -- Identity (V2 might return more data or different format)
-        v2:get("/me", "Auth@me")
-        
-        -- CRUDs
+
+        -- Identity (v2 returns a data/meta envelope with embedded profile)
+        v2:get("/me", "V2::Auth@me")
+
+        -- CRUDs (still reusing the V1 controller/format for brevity)
         v2:resources("projects")
     end)
 end

@@ -54,7 +54,7 @@ function Server:wrap(handler, ...)
     local local_mws = {...}
     local final_h = self:_to_handler(handler)
     if #local_mws == 0 then return final_h end
-    return function(ctx)
+    local wrapped = function(ctx)
         local idx = 1
         local function nxt()
             if idx > #local_mws then return final_h(ctx) end
@@ -64,6 +64,14 @@ function Server:wrap(handler, ...)
         end
         return nxt()
     end
+    -- Preserve controller/action reflection metadata through middleware
+    -- wrapping, otherwise grouped routes using :use() (e.g. authenticated
+    -- API groups) lose their `routes_meta` entry and `rio routes` / the
+    -- OpenAPI generator can no longer find the originating controller.
+    if self.routes_meta[final_h] then
+        self.routes_meta[wrapped] = self.routes_meta[final_h]
+    end
+    return wrapped
 end
 
 function Server:_to_handler(handler)
