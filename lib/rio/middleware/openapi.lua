@@ -2,6 +2,7 @@
 -- Auto-documenting OpenAPI Plugin for Rio
 
 local compat = require("rio.utils.compat")
+local path_utils = require("rio.utils.path")
 
 local function rio_to_openapi_path(path)
     local openapi_path = path:gsub(":(%w+)", "{%1}")
@@ -39,6 +40,109 @@ local function upsert_parameter(parameters, new_param)
     table.insert(parameters, new_param)
 end
 
+local function normalize_api_version(version)
+    if type(version) == "table" then
+        version = version.version or version.name or version[1]
+    end
+    if version == nil then return nil end
+
+    local v = tostring(version)
+    v = v:gsub("^%s+", ""):gsub("%s+$", "")
+    if v == "" then return nil end
+
+    v = v:gsub("^/api/", ""):gsub("^/", "")
+    if v:match("^%d+$") then v = "v" .. v end
+    return v
+end
+
+local function starts_with_path(path, prefix)
+    if not path or not prefix then return false end
+    path = path_utils.normalize(path)
+    prefix = path_utils.normalize(prefix)
+    return path == prefix or path:sub(1, #prefix + 1) == (prefix .. "/")
+end
+
+local function configured_versions(app)
+    local versions = {}
+    for _, entry in ipairs(app.config.api_versions or {}) do
+        local version = normalize_api_version(entry)
+        if version then
+            local api_prefix = type(entry) == "table" and (entry.api_prefix or entry.base_path) or nil
+            api_prefix = api_prefix or app.config.api_prefix or "/api"
+            local prefix = type(entry) == "table" and (entry.path or entry.prefix) or nil
+            table.insert(versions, {
+                version = version,
+                name = type(entry) == "table" and (entry.label or entry.title or entry.name) or nil,
+                prefix = path_utils.normalize(prefix or path_utils.join(api_prefix, version))
+            })
+        end
+    end
+    return versions
+end
+
+local function version_entry(app, requested_version)
+    local requested = normalize_api_version(requested_version)
+    if not requested then return nil end
+
+    for _, entry in ipairs(configured_versions(app)) do
+        if entry.version == requested then return entry end
+    end
+
+    return {
+        version = requested,
+        name = requested:upper(),
+        prefix = path_utils.normalize(path_utils.join(app.config.api_prefix or "/api", requested))
+    }
+end
+
+local function route_version(app, route)
+    local meta = route.meta or {}
+    local meta_version = normalize_api_version(meta.api_version or meta.version)
+    if meta_version then return meta_version end
+
+    for _, entry in ipairs(configured_versions(app)) do
+        if starts_with_path(route.path, entry.prefix) then
+            return entry.version
+        end
+    end
+
+    local api_version = route.path:match("^/api/(v[%w_.%-]+)$") or route.path:match("^/api/(v[%w_.%-]+)/")
+    if api_version then return normalize_api_version(api_version) end
+
+    return normalize_api_version(route.path:match("^/(v%d[%w_.%-]*)$") or route.path:match("^/(v%d[%w_.%-]*)/"))
+end
+
+local function route_matches_version(app, route, selected_version)
+    if not selected_version then return true end
+
+    local found = route_version(app, route)
+    if found then return found == selected_version end
+
+    local include_global = app.config.openapi_include_global_routes
+    if include_global == nil then include_global = true end
+    return include_global
+end
+
+local function versioned_json_path(app, json_path, version)
+    local entry = version_entry(app, version)
+    if not entry then return nil end
+    return path_utils.normalize(path_utils.join(entry.prefix, json_path))
+end
+
+local function match_versioned_json_path(app, json_path, request_path)
+    local path = path_utils.normalize(request_path)
+    for _, entry in ipairs(configured_versions(app)) do
+        if path == path_utils.normalize(path_utils.join(entry.prefix, json_path)) then
+            return entry.version
+        end
+    end
+    return nil
+end
+
+local function js(value)
+    return compat.json.encode(value)
+end
+
 local M = {}
 
 function M.create(app, options)
@@ -53,11 +157,12 @@ function M.create(app, options)
     }
 
     local function build_spec(version_prefix)
+        local selected_version = normalize_api_version(version_prefix)
         local spec = {
             openapi = "3.1.0",
             info = {
                 title = app.config.title or app.config.app_name or "Rio Auto-API",
-                version = version_prefix or app.config.api_version or app.config.version or "1.0.0",
+                version = selected_version or normalize_api_version(app.config.api_version) or app.config.version or "1.0.0",
                 description = app.config.description or "Auto-generated documentation via route reflection."
             },
             paths = {},
@@ -77,30 +182,8 @@ function M.create(app, options)
             for method, routes in pairs(app.router.routes) do
                 local method_lower = method:lower()
                 for _, route in ipairs(routes) do
-                    -- Skip internal docs routes and filter by version prefix if provided
-                    local is_docs = (route.path == docs_path or route.path == json_path)
-                    
-                    -- Check if route matches version filter
-                    local matches_version = true
-                    if version_prefix then
-                        -- Normalize version prefix to have leading slash
-                        local vp = version_prefix:sub(1,1) == "/" and version_prefix or ("/" .. version_prefix)
-                        
-                        -- A route matches versioning if it is explicitly part of the version or is a global route
-                        local is_versioned = route.path:find("^/v%d+/") or 
-                                            route.path:find("^/api/v%d+/") or
-                                            route.path:match("^/v%d+$") or
-                                            route.path:match("^/api/v%d+$")
-
-                        if is_versioned then
-                            matches_version = route.path:find("^" .. vp .. "/") or 
-                                             route.path == vp or
-                                             route.path:find("^/api" .. vp .. "/") or
-                                             route.path == ("/api" .. vp)
-                        else
-                            matches_version = true -- Global routes are included in all specs
-                        end
-                    end
+                    local is_docs = (route.path == docs_path or route.path == json_path or match_versioned_json_path(app, json_path, route.path))
+                    local matches_version = route_matches_version(app, route, selected_version)
 
                     if not is_docs and matches_version then
                         local path = rio_to_openapi_path(route.path)
@@ -229,8 +312,11 @@ function M.create(app, options)
     end
 
     return function(ctx, next_mw)
-        if ctx.path == json_path then
-            local version_prefix = ctx.query.v
+        local query = ctx.query or {}
+        local path_version = match_versioned_json_path(app, json_path, ctx.path)
+
+        if ctx.path == json_path or path_version then
+            local version_prefix = path_version or query.v
             return ctx:json(build_spec(version_prefix))
         end
         
@@ -239,16 +325,20 @@ function M.create(app, options)
             local ui_layout = "BaseLayout"
             local presets = "[SwaggerUIBundle.presets.apis]"
 
-            if app.config.api_versions and #app.config.api_versions > 0 then
+            local versions = configured_versions(app)
+            if #versions > 0 then
                 local urls = {}
-                for _, v in ipairs(app.config.api_versions) do
-                    table.insert(urls, string.format('{url: "%s?v=%s", name: "%s"}', json_path, v, v:upper()))
+                for _, v in ipairs(versions) do
+                    table.insert(urls, {
+                        url = options.versioned_json_paths and versioned_json_path(app, json_path, v.version) or (json_path .. "?v=" .. v.version),
+                        name = v.name or v.version:upper()
+                    })
                 end
-                urls_json = "urls: [" .. table.concat(urls, ", ") .. "],"
+                urls_json = "urls: " .. js(urls) .. ",\n        \"urls.primaryName\": " .. js((versions[1].name or versions[1].version:upper())) .. ","
                 ui_layout = "StandaloneLayout"
                 presets = "[SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset]"
             else
-                urls_json = 'url: "' .. json_path .. '",'
+                urls_json = "url: " .. js(json_path) .. ","
             end
 
             -- Set specific CSP for Swagger UI to allow necessary CDNs

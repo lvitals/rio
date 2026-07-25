@@ -15,7 +15,7 @@ return function(app)
     local authenticate = auth_mw.jwt({ secret = "rio-showcase-secret" })
 
     -- API V1
-    app:group("/api/v1", function(v1)
+    app:api("v1", function(v1)
         v1:use(authenticate)
         
         -- Identity
@@ -36,7 +36,7 @@ return function(app)
     -- returning a different response shape (data/meta envelope + embedded profile).
     -- Visit /docs and switch the version dropdown (or /openapi.json?v=v1 vs
     -- ?v=v2) to see both documented side by side.
-    app:group("/api/v2", function(v2)
+    app:api("v2", function(v2)
         v2:use(authenticate)
 
         -- Identity (v2 returns a data/meta envelope with embedded profile)

@@ -8,6 +8,7 @@ local response_lib = require("rio.core.response")
 local cache_lib = require("rio.cache")
 local compat = require("rio.utils.compat")
 local string_utils = require("rio.utils.string")
+local path_utils = require("rio.utils.path")
 local ui = require("rio.utils.ui")
 local c = compat.colors
 
@@ -118,34 +119,56 @@ function Server:_to_handler(handler)
     return handler
 end
 
-function Server:get(p, h) self.router:add_route("GET", p, self:_to_handler(h)); return self end
-function Server:post(p, h) self.router:add_route("POST", p, self:_to_handler(h)); return self end
-function Server:put(p, h) self.router:add_route("PUT", p, self:_to_handler(h)); return self end
-function Server:patch(p, h) self.router:add_route("PATCH", p, self:_to_handler(h)); return self end
-function Server:delete(p, h) self.router:add_route("DELETE", p, self:_to_handler(h)); return self end
-function Server:ws(p, h) self.router:add_route("WS", p, self:_to_handler(h)); return self end
+function Server:get(p, h, options) self.router:add_route("GET", p, self:_to_handler(h), options); return self end
+function Server:post(p, h, options) self.router:add_route("POST", p, self:_to_handler(h), options); return self end
+function Server:put(p, h, options) self.router:add_route("PUT", p, self:_to_handler(h), options); return self end
+function Server:patch(p, h, options) self.router:add_route("PATCH", p, self:_to_handler(h), options); return self end
+function Server:delete(p, h, options) self.router:add_route("DELETE", p, self:_to_handler(h), options); return self end
+function Server:ws(p, h, options) self.router:add_route("WS", p, self:_to_handler(h), options); return self end
 
-function Server:resources(name, cn)
+function Server:resources(name, cn, options)
     local controller = cn or (name .. "_controller")
-    local function add(m, a, p) self[m](self, "/" .. name .. (p or ""), controller .. "@" .. a) end
+    local function add(m, a, p) self[m](self, "/" .. name .. (p or ""), controller .. "@" .. a, options) end
     add("get", "index"); add("get", "new", "/new"); add("post", "create")
     add("get", "show", "/:id"); add("get", "edit", "/:id/edit")
     add("put", "update", "/:id"); add("patch", "update", "/:id"); add("delete", "destroy", "/:id")
     return self
 end
 
-function Server:group(prefix, fn)
-    self.router:push_prefix(prefix)
+local function normalize_api_version(version)
+    if type(version) == "table" then
+        version = version.version or version.name or version[1]
+    end
+    local v = tostring(version or "")
+    v = v:gsub("^%s+", ""):gsub("%s+$", "")
+    v = v:gsub("^/api/", ""):gsub("^/", "")
+    if v:match("^%d+$") then v = "v" .. v end
+    return v
+end
+
+local function register_api_version(config, version)
+    if version == "" then return end
+    if type(config.api_versions) ~= "table" then config.api_versions = {} end
+    for _, existing in ipairs(config.api_versions) do
+        local existing_version = type(existing) == "table" and (existing.version or existing.name or existing[1]) or existing
+        if normalize_api_version(existing_version) == version then return end
+    end
+    table.insert(config.api_versions, version)
+end
+
+function Server:group(prefix, fn, options)
+    self.router:push_scope(prefix, options)
     local proxy = setmetatable({
         _mws = {},
         use = function(s, mw) table.insert(s._mws, mw); return s end,
-        get = function(s, p, h) self:get(p, self:wrap(h, compat.unpack(s._mws))); return s end,
-        post = function(s, p, h) self:post(p, self:wrap(h, compat.unpack(s._mws))); return s end,
-        put = function(s, p, h) self:put(p, self:wrap(h, compat.unpack(s._mws))); return s end,
-        patch = function(s, p, h) self:patch(p, self:wrap(h, compat.unpack(s._mws))); return s end,
-        delete = function(s, p, h) self:delete(p, self:wrap(h, compat.unpack(s._mws))); return s end,
-        resources = function(s, name, cn)
-            local function radd(m, a, p) s[m](s, "/" .. name .. (p or ""), (cn or (name .. "_controller")) .. "@" .. a) end
+        get = function(s, p, h, route_options) self:get(p, self:wrap(h, compat.unpack(s._mws)), route_options); return s end,
+        post = function(s, p, h, route_options) self:post(p, self:wrap(h, compat.unpack(s._mws)), route_options); return s end,
+        put = function(s, p, h, route_options) self:put(p, self:wrap(h, compat.unpack(s._mws)), route_options); return s end,
+        patch = function(s, p, h, route_options) self:patch(p, self:wrap(h, compat.unpack(s._mws)), route_options); return s end,
+        delete = function(s, p, h, route_options) self:delete(p, self:wrap(h, compat.unpack(s._mws)), route_options); return s end,
+        ws = function(s, p, h, route_options) self:ws(p, self:wrap(h, compat.unpack(s._mws)), route_options); return s end,
+        resources = function(s, name, cn, route_options)
+            local function radd(m, a, p) s[m](s, "/" .. name .. (p or ""), (cn or (name .. "_controller")) .. "@" .. a, route_options) end
             radd("get", "index"); radd("get", "new", "/new"); radd("post", "create")
             radd("get", "show", "/:id"); radd("get", "edit", "/:id/edit")
             radd("put", "update", "/:id"); radd("patch", "update", "/:id"); radd("delete", "destroy", "/:id")
@@ -153,7 +176,37 @@ function Server:group(prefix, fn)
         end
     }, { __index = self })
     fn(proxy)
-    self.router:pop_prefix()
+    self.router:pop_scope()
+    return self
+end
+
+function Server:api(version, fn, options)
+    options = options or {}
+    local api_version = normalize_api_version(version)
+    local api_prefix = options.prefix or self.config.api_prefix or "/api"
+    local prefix = options.path or path_utils.join(api_prefix, api_version)
+    local meta = {}
+    for k, v in pairs(options) do meta[k] = v end
+    meta.api_version = api_version
+    meta.api_prefix = api_prefix
+    meta.api = true
+
+    register_api_version(self.config, api_version)
+    return self:group(prefix, fn, meta)
+end
+
+function Server:api_version(version, fn, options)
+    return self:api(version, fn, options)
+end
+
+function Server:version(version, fn, options)
+    return self:api(version, fn, options)
+end
+
+function Server:versions(versions, fn, options)
+    for _, version in ipairs(versions or {}) do
+        self:api(version, function(api) fn(api, normalize_api_version(version)) end, options)
+    end
     return self
 end
 

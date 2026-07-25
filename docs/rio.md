@@ -310,6 +310,10 @@ Routes are defined in
 
 > Nests routes under a common URI prefix.
 
+**app:api(version, function(app) ... end)**
+
+> Nests routes under `/api/<version>` and marks them for version-aware OpenAPI generation.
+
 **app:resources(name, \[controller])**
 
 > Generates RESTful routes for a resource (index, show, new, edit, create, update, destroy).

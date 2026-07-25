@@ -10,7 +10,18 @@ Router.__index = Router
 function M.new()
     local routes = {}
     for _, method in ipairs(METHODS) do routes[method] = {} end
-    return setmetatable({ routes = routes, _prefix_stack = {} }, Router)
+    return setmetatable({ routes = routes, _prefix_stack = {}, _scope_stack = {} }, Router)
+end
+
+local function merge_meta(...)
+    local out = {}
+    for i = 1, select("#", ...) do
+        local meta = select(i, ...)
+        if type(meta) == "table" then
+            for k, v in pairs(meta) do out[k] = v end
+        end
+    end
+    return out
 end
 
 function Router:add_route(method, path, handler, options)
@@ -31,13 +42,14 @@ function Router:add_route(method, path, handler, options)
     local prefix = self:get_current_prefix()
     local fullPath = path_utils.normalize(path_utils.join(prefix, path))
     local pattern, names = path_utils.compile(fullPath)
+    local meta = merge_meta(self:get_current_scope_meta(), options)
     
     table.insert(self.routes[method], {
         pattern = pattern,
         names = names,
         handler = handler,
         path = fullPath,
-        meta = options or {}
+        meta = meta
     })
     return self
 end
@@ -62,14 +74,40 @@ for _, m in ipairs(METHODS) do
     end
 end
 
-function Router:set_prefix(prefix) self._base_prefix = prefix or "" end
-function Router:clear_prefix() self._base_prefix = "" end
-function Router:push_prefix(prefix) table.insert(self._prefix_stack, prefix or "") end
-function Router:pop_prefix() table.remove(self._prefix_stack) end
+function Router:set_prefix(prefix, meta)
+    self._base_prefix = prefix or ""
+    self._base_meta = meta or {}
+end
+function Router:clear_prefix()
+    self._base_prefix = ""
+    self._base_meta = {}
+end
+function Router:push_prefix(prefix) return self:push_scope(prefix) end
+function Router:pop_prefix() return self:pop_scope() end
+
+function Router:push_scope(prefix, meta)
+    table.insert(self._prefix_stack, prefix or "")
+    table.insert(self._scope_stack, meta or {})
+    return self
+end
+
+function Router:pop_scope()
+    table.remove(self._prefix_stack)
+    table.remove(self._scope_stack)
+    return self
+end
 
 function Router:get_current_prefix()
     local acc = self._base_prefix or ""
     for _, p in ipairs(self._prefix_stack) do acc = path_utils.join(acc, p) end
+    return acc
+end
+
+function Router:get_current_scope_meta()
+    local acc = merge_meta(self._base_meta)
+    for _, meta in ipairs(self._scope_stack) do
+        acc = merge_meta(acc, meta)
+    end
     return acc
 end
 

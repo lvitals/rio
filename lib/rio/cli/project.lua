@@ -88,6 +88,11 @@ return HomeController
     ctx.files.ensure_dir(config_dir .. "/initializers")
 
     local app_name_human = string_utils.camel_case(project_name)
+    local api_version_content = api_only and [[
+    api_version = "v1",
+    api_versions = { "v1" },
+]] or ""
+
     local application_content = string.format([[
 -- config/application.lua
 -- Application-wide configurations for the Rio framework.
@@ -101,6 +106,7 @@ return {
     api_only = %s,
     title = "%s API",
     description = "Auto-generated documentation for %s",
+%s
     version = "1.0.0",
     api_format = "json", -- Options: "json", "jsonapi"
 
@@ -108,7 +114,7 @@ return {
     -- openapi_path = "/docs",           -- Changes the UI path from /docs to your preference
     -- openapi_json_path = "/openapi.json" -- Changes the JSON spec path
 }
-]], tostring(api_only), app_name_human, app_name_human)
+]], tostring(api_only), app_name_human, app_name_human, api_version_content)
     write(ctx, config_dir .. "/application.lua", application_content)
 
     local middlewares_content = [[

@@ -41,6 +41,22 @@ describe("Rio Server", function()
         local not_found = app.router:match("GET", "/test")
         assert.is_nil(not_found)
     end)
+
+    it("should register versioned API routes", function()
+        app:api("v1", function(api)
+            api:get("/ping", function() end)
+        end)
+
+        local found_handler = app.router:match("GET", "/api/v1/ping")
+        assert.is_not_nil(found_handler)
+        assert.is_nil(app.router:match("GET", "/ping"))
+
+        local route = app.router.routes.GET[1]
+        assert.equals("/api/v1/ping", route.path)
+        assert.equals("v1", route.meta.api_version)
+        assert.equals("/api", route.meta.api_prefix)
+        assert.is_true(route.meta.api)
+    end)
     
     it("should process requests successfully", function()
         app:get("/ping", function(ctx) return ctx:text("pong", 200) end)

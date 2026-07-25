@@ -312,6 +312,10 @@
   <dt id="app:group(prefix,"><a class="permalink" href="#app:group(prefix,"><code class="Cm">app:group(prefix,
     function(app) ... end)</code></a></dt>
   <dd>Nests routes under a common URI prefix.</dd>
+  <dt id="app:api(version,"><a class="permalink" href="#app:api(version,"><code class="Cm">app:api(version,
+    function(app) ... end)</code></a></dt>
+  <dd>Nests routes under <code class="Pa">/api/&lt;version&gt;</code> and marks
+      them for version-aware OpenAPI generation.</dd>
   <dt id="app:resources(name,"><a class="permalink" href="#app:resources(name,"><code class="Cm">app:resources(name,
     [controller])</code></a></dt>
   <dd>Generates RESTful routes for a resource (index, show, new, edit, create,
