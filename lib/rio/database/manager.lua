@@ -16,6 +16,20 @@ function M.clear_query_cache()
     M.query_cache = {}
 end
 
+local function is_mutating_sql(sql)
+    local statement = tostring(sql or ""):match("^%s*(%S+)")
+    if not statement then return false end
+    statement = statement:lower()
+    return statement == "insert"
+        or statement == "update"
+        or statement == "delete"
+        or statement == "replace"
+        or statement == "truncate"
+        or statement == "create"
+        or statement == "alter"
+        or statement == "drop"
+end
+
 -- Loads the database configuration and initializes the correct adapter.
 function M.initialize(config)
     if not config then
@@ -170,7 +184,7 @@ local function wrap_adapter_call(method_name, ...)
     local res, err = active_adapter[method_name](...)
     if not res and err then
         local sql, bindings = ...
-        if sql then
+        if M.verbose and sql then
             print(string.format("%s-- DATABASE ERROR QUERY --%s", "\27[31m", "\27[0m"))
             print("SQL: " .. tostring(sql))
             if bindings and type(bindings) == "table" and #bindings > 0 then
@@ -198,7 +212,9 @@ end
 
 -- Executes a raw query.
 function M.query(sql, bindings)
-    return wrap_adapter_call("query", sql, bindings)
+    local res, err = wrap_adapter_call("query", sql, bindings)
+    if res and is_mutating_sql(sql) then M.clear_query_cache() end
+    return res, err
 end
 
 -- Executes a raw query asynchronously.
@@ -212,9 +228,9 @@ function M.async_query(sql, bindings)
 end
 
 -- Executes an insert query asynchronously and returns the last inserted ID.
-function M.async_insert(sql, bindings)
+function M.async_insert(sql, bindings, options)
     M.clear_query_cache()
-    return wrap_adapter_call("async_insert", sql, bindings)
+    return wrap_adapter_call("async_insert", sql, bindings, options)
 end
 
 -- Executes an update query asynchronously and returns the number of affected rows.
@@ -230,9 +246,9 @@ function M.async_delete(sql, bindings)
 end
 
 -- Executes an insert query and returns the last inserted ID.
-function M.insert(sql, bindings)
+function M.insert(sql, bindings, options)
     M.clear_query_cache()
-    return wrap_adapter_call("insert", sql, bindings)
+    return wrap_adapter_call("insert", sql, bindings, options)
 end
 
 -- Executes an update query and returns the number of affected rows.
@@ -337,29 +353,48 @@ end
 function M.transaction(callback_fn, ...)
     ensure_initialized() -- Ensure the manager is initialized
 
-    -- Start the transaction
-    local ok_begin, err_begin = M.begin()
+    if not active_adapter.reserve_connection then
+        return nil, format_error_obj("The active database adapter does not support pinned transactions.")
+    end
+
+    -- Reserve a single physical connection for the entire transaction. Every
+    -- query/insert/update/delete the callback performs on this coroutine
+    -- transparently reuses this same connection (see BaseAdapter:get_connection),
+    -- so BEGIN, the callback's statements, and COMMIT/ROLLBACK are guaranteed
+    -- to run on one connection instead of drifting across the pool.
+    local conn, err_reserve = active_adapter.reserve_connection()
+    if not conn then
+        return nil, format_error_obj(err_reserve or "Unable to reserve a database connection for transaction.")
+    end
+
+    local ok_begin, err_begin = active_adapter.query("BEGIN")
     if not ok_begin then
-        return nil, format_error_obj(err_begin) -- Return formatted error
+        active_adapter.release_reserved(true)
+        return nil, format_error_obj(err_begin)
     end
 
     -- Execute the callback function within the transaction
     local ok_call, result_or_err = pcall(callback_fn, ...) -- Pass additional args to callback
 
     if ok_call then
-        -- If callback succeeded, commit the transaction
-        local ok_commit, err_commit = M.commit()
+        -- If callback succeeded, commit the transaction on the SAME connection
+        local ok_commit, err_commit = active_adapter.query("COMMIT")
         if not ok_commit then
-            -- If commit fails, attempt to rollback and return the commit error
-            local _, _ = M.rollback() -- Attempt rollback, ignore its error for now to prioritize commit error
+            -- If commit fails, attempt to rollback (defensively, in case the
+            -- connection is left in an aborted transaction state) before
+            -- returning it to the pool.
+            active_adapter.release_reserved(true)
             return nil, format_error_obj(err_commit)
         end
+        active_adapter.release_reserved(false)
+        M.clear_query_cache()
         -- Return the result of the callback function
         return result_or_err
     else
-        -- If callback failed, rollback the transaction
-        local _, err_rollback = M.rollback()
-        if err_rollback then
+        -- If callback failed, rollback the transaction on the SAME connection
+        local ok_rollback, err_rollback = active_adapter.query("ROLLBACK")
+        active_adapter.release_reserved(not ok_rollback)
+        if not ok_rollback then
             -- Log or format the rollback error if significant, but prioritize the original error from callback
             print("Warning: Error during transaction rollback: " .. tostring(err_rollback))
         end

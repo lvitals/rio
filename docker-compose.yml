@@ -1,6 +1,29 @@
 version: '3.8'
 
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rio-test-app
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      RIO_ENV: test
+      RIO_HASH_ITERATIONS: "1"
+      RIO_TEST_POSTGRES_HOST: postgres
+      RIO_TEST_MYSQL_HOST: mysql
+      RIO_TEST_POSTGRES_DB: postgres
+      RIO_TEST_POSTGRES_USER: postgres
+      RIO_TEST_POSTGRES_PASS: postgres
+      RIO_TEST_MYSQL_DB: test
+      RIO_TEST_MYSQL_USER: root
+      RIO_TEST_MYSQL_PASS: "123456"
+    depends_on:
+      - postgres
+      - mysql
+
   postgres:
     image: docker.io/library/postgres:alpine
     container_name: rio-test-postgres

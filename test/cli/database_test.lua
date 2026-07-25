@@ -90,7 +90,9 @@ describe("Rio CLI Database Services", function()
             }
         })
 
-        db_core.install({ "mysql", "MYSQL_DIR=" .. include_root })
+        helpers.capture_prints(function()
+            db_core.install({ "mysql", "MYSQL_DIR=" .. include_root })
+        end)
         os.execute = original_execute
         helpers.remove_tree(root)
 

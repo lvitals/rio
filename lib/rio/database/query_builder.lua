@@ -199,6 +199,10 @@ function QueryBuilder:_escapeValue(value)
 end
 
 function QueryBuilder:_validateIdentifier(id) if not id:match("^[a-zA-Z0-9_.]+$") then error("Invalid identifier: " .. id) end return id end
+function QueryBuilder:_validateColumnIdentifier(id)
+    if type(id) ~= "string" or not id:match("^[_%a][_%w]*$") then error("Invalid column identifier: " .. tostring(id)) end
+    return id
+end
 
 function QueryBuilder:get()
     local sql = self:toSql()
@@ -235,10 +239,31 @@ function QueryBuilder:max(col) self._selects = {string.format("MAX(%s) as val", 
 
 function QueryBuilder:insert(data)
     if not data or not next(data) then return nil, "No data" end
-    local columns, values = {}, {}
-    for k, v in pairs(data) do table.insert(columns, k); table.insert(values, self:_escapeValue(v)) end
-    local sql = string.format("INSERT INTO %s (%s) VALUES (%s)", self._table, table.concat(columns, ", "), table.concat(values, ", "))
-    return DBManager.insert(sql)
+    local columns, placeholders, bindings = {}, {}, {}
+    for k, v in pairs(data) do
+        table.insert(columns, self:_validateColumnIdentifier(k))
+        table.insert(placeholders, "?")
+        table.insert(bindings, v)
+    end
+
+    local primary_key = (self._model and self._model.primary_key) or "id"
+    self:_validateColumnIdentifier(primary_key)
+
+    local sql = string.format(
+        "INSERT INTO %s (%s) VALUES (%s)",
+        self._table,
+        table.concat(columns, ", "),
+        table.concat(placeholders, ", ")
+    )
+
+    local inserted_id, err = DBManager.insert(sql, bindings, {
+        primary_key = primary_key,
+        primary_key_value = data[primary_key]
+    })
+    if inserted_id ~= nil and data[primary_key] ~= nil then
+        return data[primary_key]
+    end
+    return inserted_id, err
 end
 
 function QueryBuilder:update(data)

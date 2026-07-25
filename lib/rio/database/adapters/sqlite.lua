@@ -36,9 +36,8 @@ function SQLiteAdapter:connect(config)
     local db_file = cfg.database
     if not db_file then return nil, "Database file not specified" end
 
-    -- For :memory: databases, we MUST use pooling and keep at least one connection
     local is_memory = (db_file == ":memory:")
-    if is_memory and self.MAX_POOL_SIZE < 1 then
+    if is_memory then
         self.MAX_POOL_SIZE = 1
     end
 
@@ -70,13 +69,10 @@ function SQLiteAdapter:connect(config)
     return conn, env
 end
 
-function SQLiteAdapter:release_connection(conn, env)
+function SQLiteAdapter:_pool_release(conn, env)
     if not conn then return end
     
-    -- Always pool :memory: connections to keep data alive in SQLite
-    local is_memory = (self.config and self.config.database == ":memory:")
-    
-    if is_memory or self.pool_size < self.MAX_POOL_SIZE then
+    if self.pool_size < self.MAX_POOL_SIZE then
         table.insert(self.connection_pool, {conn, env})
         self.pool_size = self.pool_size + 1
     else
@@ -86,6 +82,8 @@ function SQLiteAdapter:release_connection(conn, env)
         end
     end
 end
+
+SQLiteAdapter.release_connection = BaseAdapter.release_connection
 
 -- Rules
 function SQLiteAdapter:get_pk_definition() return "id INTEGER PRIMARY KEY AUTOINCREMENT" end
@@ -160,6 +158,31 @@ local function execute_cooperative(conn, sql)
     return conn:execute(sql)
 end
 
+function SQLiteAdapter:supports_returning(conn)
+    if self._supports_returning ~= nil then return self._supports_returning end
+
+    local cur = conn:execute("SELECT sqlite_version() as version")
+    local version = nil
+    if cur and type(cur) ~= "number" then
+        local row = cur:fetch({}, "a")
+        version = row and (row.version or row.VERSION or row[1])
+        cur:close()
+    end
+
+    local major, minor, patch = tostring(version or ""):match("^(%d+)%.(%d+)%.(%d+)")
+    major, minor, patch = tonumber(major), tonumber(minor), tonumber(patch)
+    self._supports_returning = false
+    if major and (
+        major > 3 or
+        (major == 3 and minor > 35) or
+        (major == 3 and minor == 35 and (patch or 0) >= 0)
+    ) then
+        self._supports_returning = true
+    end
+
+    return self._supports_returning
+end
+
 -- Data manipulation
 function SQLiteAdapter:query(sql, bindings)
     local conn, env = self:get_connection()
@@ -198,29 +221,60 @@ function SQLiteAdapter:query(sql, bindings)
     return res
 end
 
-function SQLiteAdapter:insert(sql, bindings)
+function SQLiteAdapter:insert(sql, bindings, options)
     local conn, env = self:get_connection()
     if not conn then return nil, env end
-    
-    local final_sql = self:escape_params(conn, sql, bindings)
-    local res, err = execute_cooperative(conn, final_sql)
-    if err then
+
+    local primary_key, pk_err = self:get_insert_primary_key(options)
+    if not primary_key then
         self:release_connection(conn, env)
-        return nil, err
+        return nil, pk_err
     end
-    
-    local cur_id, id_err = execute_cooperative(conn, "SELECT last_insert_rowid() as id")
+
+    local explicit_id = self:get_explicit_primary_key_value(options)
     local id = nil
-    if type(cur_id) == "number" then
-        id = cur_id
-    elseif cur_id then
-        local row = cur_id:fetch({}, "a")
-        id = row and (row.id or row.ID or row[1])
-        cur_id:close()
+    if self:supports_returning(conn) then
+        local returning_sql = self:append_returning_clause(sql, primary_key)
+        local final_sql = self:escape_params(conn, returning_sql, bindings)
+        local cur, err = execute_cooperative(conn, final_sql)
+        if err then
+            self:release_connection(conn, env)
+            return nil, err
+        end
+
+        if type(cur) == "number" then
+            id = self:get_explicit_primary_key_value(options)
+        elseif cur then
+            local row = cur:fetch({}, "a")
+            id = self:read_returned_insert_id(row, primary_key)
+            cur:close()
+        end
+    else
+        local final_sql = self:escape_params(conn, sql, bindings)
+        local _, err = execute_cooperative(conn, final_sql)
+        if err then
+            self:release_connection(conn, env)
+            return nil, err
+        end
+    end
+
+    if explicit_id ~= nil then
+        id = explicit_id
+    end
+
+    if id == nil then
+        local cur_id = execute_cooperative(conn, "SELECT last_insert_rowid() as id")
+        if type(cur_id) == "number" then
+            id = cur_id
+        elseif cur_id then
+            local row = cur_id:fetch({}, "a")
+            id = row and (row.id or row.ID or row[1])
+            cur_id:close()
+        end
     end
     
     self:release_connection(conn, env)
-    return id and tonumber(id)
+    return self:normalize_insert_id(id)
 end
 
 function SQLiteAdapter:update(sql, bindings) return self:query(sql, bindings) end
@@ -408,13 +462,15 @@ function M.remove_migration_record(c, n) return get_instance():remove_migration_
 
 -- CRUD
 function M.query(s, b) return get_instance():query(s, b) end
-function M.insert(s, b) return get_instance():insert(s, b) end
+function M.insert(s, b, o) return get_instance():insert(s, b, o) end
 function M.update(s, b) return get_instance():update(s, b) end
 function M.delete(s, b) return get_instance():delete(s, b) end
 function M.execute_async(sql, bindings) return get_instance():execute_async(sql, bindings) end
 function M.async_query(sql, bindings) return get_instance():async_query(sql, bindings) end
-function M.async_insert(sql, bindings) return get_instance():async_insert(sql, bindings) end
+function M.async_insert(sql, bindings, options) return get_instance():async_insert(sql, bindings, options) end
 function M.async_update(sql, bindings) return get_instance():async_update(sql, bindings) end
 function M.async_delete(sql, bindings) return get_instance():async_delete(sql, bindings) end
+function M.reserve_connection() return get_instance():reserve_connection() end
+function M.release_reserved(rollback_if_open) return get_instance():release_reserved(rollback_if_open) end
 
 return M

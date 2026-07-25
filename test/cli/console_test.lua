@@ -16,7 +16,7 @@ describe("Rio CLI Console", function()
     it("uses bestline as the console line editor", function()
         local console = read_file("lib/rio/cli/commands/console.lua")
         local dev_rockspec = read_file("rio-dev-1.rockspec")
-        local release_rockspec = read_file("rio-0.1.19-1.rockspec")
+        local release_rockspec = read_file("rio-0.1.21-1.rockspec")
         local removed_module = "line" .. "noise"
 
         assert.truthy(console:find('require, "bestline"', 1, true))

@@ -147,9 +147,10 @@ function MySQLAdapter:query(sql, bindings)
     return res
 end
 
-function MySQLAdapter:insert(sql, bindings)
+function MySQLAdapter:insert(sql, bindings, options)
     local conn, env = self:get_connection()
     if not conn then return nil, env end
+    local explicit_id = self:get_explicit_primary_key_value(options)
     
     local final_sql = self:escape_params(conn, sql, bindings)
     local _, err = conn:execute(final_sql)
@@ -157,14 +158,30 @@ function MySQLAdapter:insert(sql, bindings)
         self:release_connection(conn, env)
         return nil, err
     end
+
+    if explicit_id ~= nil then
+        self:release_connection(conn, env)
+        return explicit_id
+    end
     
-    local cur_id = conn:execute("SELECT LAST_INSERT_ID() as id")
-    local row = cur_id and cur_id:fetch({}, "a")
-    local id = row and tonumber(row.id)
-    if cur_id then cur_id:close() end
-    
+    local id = nil
+    if conn.insert_id then
+        local ok_id, native_id = pcall(function() return conn:insert_id() end)
+        if ok_id then id = native_id end
+    elseif conn.getlastautoid then
+        local ok_id, native_id = pcall(function() return conn:getlastautoid() end)
+        if ok_id then id = native_id end
+    end
+
+    if id == nil or tonumber(id) == 0 then
+        local cur_id = conn:execute("SELECT LAST_INSERT_ID() as id")
+        local row = cur_id and cur_id:fetch({}, "a")
+        id = row and (row.id or row.ID or row[1])
+        if cur_id then cur_id:close() end
+    end
+
     self:release_connection(conn, env)
-    return id
+    return self:normalize_insert_id(id)
 end
 
 function MySQLAdapter:update(sql, bindings) return self:query(sql, bindings) end
@@ -260,11 +277,15 @@ function MySQLAdapter:drop_database(db_config)
 end
 
 function MySQLAdapter.disconnect()
-    if instance and instance.pool then
-        for _, conn in ipairs(instance.pool) do
-            pcall(conn.close, conn)
+    if instance and instance.connection_pool then
+        for _, conn_pair in ipairs(instance.connection_pool) do
+            local conn = conn_pair[1]
+            local env = conn_pair[2]
+            if conn then pcall(conn.close, conn) end
+            if env and env.close then pcall(env.close, env) end
         end
-        instance.pool = {}
+        instance.connection_pool = {}
+        instance.pool_size = 0
     end
     if instance and instance.env then
         pcall(instance.env.close, instance.env)
@@ -351,7 +372,10 @@ local function get_instance(cfg)
         }, MySQLAdapter)
         instance:initialize()
     end
-    if cfg then instance.config = cfg end
+    if cfg then
+        instance.config = cfg
+        if cfg.pool then instance.MAX_POOL_SIZE = cfg.pool end
+    end
     return instance
 end
 
@@ -376,13 +400,15 @@ function M.remove_migration_record(c, n) return get_instance():remove_migration_
 
 -- CRUD
 function M.query(s, b) return get_instance():query(s, b) end
-function M.insert(s, b) return get_instance():insert(s, b) end
+function M.insert(s, b, o) return get_instance():insert(s, b, o) end
 function M.update(s, b) return get_instance():update(s, b) end
 function M.delete(s, b) return get_instance():delete(s, b) end
 function M.execute_async(sql, bindings) return get_instance():execute_async(sql, bindings) end
 function M.async_query(sql, bindings) return get_instance():async_query(sql, bindings) end
-function M.async_insert(sql, bindings) return get_instance():async_insert(sql, bindings) end
+function M.async_insert(sql, bindings, options) return get_instance():async_insert(sql, bindings, options) end
 function M.async_update(sql, bindings) return get_instance():async_update(sql, bindings) end
 function M.async_delete(sql, bindings) return get_instance():async_delete(sql, bindings) end
+function M.reserve_connection() return get_instance():reserve_connection() end
+function M.release_reserved(rollback_if_open) return get_instance():release_reserved(rollback_if_open) end
 
 return M

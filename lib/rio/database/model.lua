@@ -279,9 +279,10 @@ function Model:raw(s, b) return QueryBuilder.raw(s, b) end
 function Model:async_raw(s, b) local DBM = require("rio.database.manager"); return DBM.async_query(s, b) end
 
 function Model.transaction(cb)
-    local DBM = require("rio.database.manager"); DBM.begin()
-    local ok, res = pcall(cb)
-    if ok then DBM.commit(); return res else DBM.rollback(); error(res) end
+    local DBM = require("rio.database.manager")
+    local result, err = DBM.transaction(cb)
+    if err then error(err) end
+    return result
 end
 
 -- ==========================
@@ -398,7 +399,7 @@ function Model:_create()
     if self.class.timestamps then self.created_at = os.date("%Y-%m-%d %H:%M:%S"); self.updated_at = self.created_at end
     local data = self:_filterAttributes(self._attributes)
     local id = self:query():insert(data)
-    if id then self[self.primary_key or "id"] = id; self._exists = true; self._original = self:_copy(self._attributes); return true end
+    if id ~= nil then self[self.primary_key or "id"] = id; self._exists = true; self._original = self:_copy(self._attributes); return true end
     return false
 end
 
@@ -407,23 +408,25 @@ function Model:_async_create()
     if self.class.timestamps then self.created_at = os.date("%Y-%m-%d %H:%M:%S"); self.updated_at = self.created_at end
     local data = self:_filterAttributes(self._attributes)
     local id = self:query():async_insert(data)
-    if id then self[self.primary_key or "id"] = id; self._exists = true; self._original = self:_copy(self._attributes); return true end
+    if id ~= nil then self[self.primary_key or "id"] = id; self._exists = true; self._original = self:_copy(self._attributes); return true end
     return false
 end
 
 function Model:_update()
     if self.before_update then self.before_update(self) end
     if self.class.timestamps then self.updated_at = os.date("%Y-%m-%d %H:%M:%S") end
-    local data = self:_filterAttributes(self._attributes); data[self.primary_key or "id"] = nil
-    if self:query():where(self.primary_key or "id", self.id):update(data) then self._original = self:_copy(self._attributes); return true end
+    local pk = self.primary_key or "id"
+    local data = self:_filterAttributes(self._attributes); data[pk] = nil
+    if self:query():where(pk, self[pk]):update(data) then self._original = self:_copy(self._attributes); return true end
     return false
 end
 
 function Model:_async_update()
     if self.before_update then self.before_update(self) end
     if self.class.timestamps then self.updated_at = os.date("%Y-%m-%d %H:%M:%S") end
-    local data = self:_filterAttributes(self._attributes); data[self.primary_key or "id"] = nil
-    if self:query():where(self.primary_key or "id", self.id):async_update(data) then self._original = self:_copy(self._attributes); return true end
+    local pk = self.primary_key or "id"
+    local data = self:_filterAttributes(self._attributes); data[pk] = nil
+    if self:query():where(pk, self[pk]):async_update(data) then self._original = self:_copy(self._attributes); return true end
     return false
 end
 
@@ -470,7 +473,8 @@ function Model:validate()
             if type(rules) == "string" then rules = { [rules] = true } end
             if rules.presence and (v == nil or v == "" or (type(v) == "string" and v:match("^%s*$"))) then self.errors:add(f, "can't be blank") end
             if rules.uniqueness and v then
-                local q = self:query():where(f, v); if self._exists then q:where(self.primary_key or "id", "!=", self.id) end
+                local pk = self.primary_key or "id"
+                local q = self:query():where(f, v); if self._exists then q:where(pk, "!=", self[pk]) end
                 if q:first() then self.errors:add(f, "has already been taken") end
             end
             if rules.format and v then

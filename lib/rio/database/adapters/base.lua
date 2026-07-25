@@ -15,6 +15,19 @@ local function warn_missing_driver(message)
     end
 end
 
+-- Identifies the current coroutine (or the main thread) so that a connection
+-- reserved for a transaction is only visible to the thread that opened it.
+-- In Lua 5.1, coroutine.running() returns nil on the main thread; in 5.2+ it
+-- returns a distinct main-thread object, which already works as a unique key.
+local function current_thread_key()
+    return coroutine.running() or "__main__"
+end
+
+local function normalize_insert_id(value)
+    if value == nil then return nil end
+    return tonumber(value) or value
+end
+
 function BaseAdapter:new(config)
     local o = setmetatable({
         config = config or {},
@@ -25,6 +38,40 @@ function BaseAdapter:new(config)
         MAX_POOL_SIZE = (config and config.pool) or 10
     }, self)
     return o
+end
+
+function BaseAdapter:normalize_insert_id(value)
+    return normalize_insert_id(value)
+end
+
+function BaseAdapter:validate_column_identifier(identifier)
+    if type(identifier) ~= "string" or not identifier:match("^[_%a][_%w]*$") then
+        return nil, "Invalid column identifier: " .. tostring(identifier)
+    end
+    return identifier
+end
+
+function BaseAdapter:get_insert_primary_key(options)
+    local primary_key = (options and options.primary_key) or "id"
+    return self:validate_column_identifier(primary_key)
+end
+
+function BaseAdapter:append_returning_clause(sql, column)
+    if sql:upper():find("%f[%w]RETURNING%f[%W]") then return sql end
+    local body = sql:gsub("%s*;%s*$", "")
+    return body .. " RETURNING " .. column
+end
+
+function BaseAdapter:get_explicit_primary_key_value(options)
+    if options and options.primary_key_value ~= nil then
+        return self:normalize_insert_id(options.primary_key_value)
+    end
+    return nil
+end
+
+function BaseAdapter:read_returned_insert_id(row, primary_key)
+    if not row then return nil end
+    return row[primary_key] or row[primary_key:upper()] or row[1]
 end
 
 -- Must be implemented by subclasses
@@ -56,6 +103,11 @@ end
 function BaseAdapter:connect() error("Not implemented") end
 
 function BaseAdapter:get_connection()
+    local key = current_thread_key()
+    if self._reserved and self._reserved[key] then
+        local r = self._reserved[key]
+        return r.conn, r.env
+    end
     if self.pool_size > 0 then
         local conn_pair = table.remove(self.connection_pool)
         self.pool_size = self.pool_size - 1
@@ -64,7 +116,10 @@ function BaseAdapter:get_connection()
     return self:connect()
 end
 
-function BaseAdapter:release_connection(conn, env_obj)
+-- Returns a connection directly to the pool (or closes it if the pool is
+-- full), bypassing any active transaction reservation. Only meant to be
+-- called by release_connection() and release_reserved().
+function BaseAdapter:_pool_release(conn, env_obj)
     if not conn then return end
     if self.pool_size < self.MAX_POOL_SIZE then
         table.insert(self.connection_pool, {conn, env_obj})
@@ -73,6 +128,56 @@ function BaseAdapter:release_connection(conn, env_obj)
         conn:close()
         if env_obj and env_obj.close then env_obj:close() end
     end
+end
+
+function BaseAdapter:release_connection(conn, env_obj)
+    if not conn then return end
+    local key = current_thread_key()
+    if self._reserved and self._reserved[key] and self._reserved[key].conn == conn then
+        -- This connection is pinned to an in-progress transaction on the
+        -- current coroutine/thread; keep it checked out until the
+        -- transaction wrapper explicitly releases it via release_reserved().
+        return
+    end
+    self:_pool_release(conn, env_obj)
+end
+
+-- Reserves a single connection for the duration of a transaction on the
+-- current coroutine/thread. Every get_connection()/release_connection() call
+-- made by that same thread (directly or through query/insert/update/delete)
+-- will transparently reuse this exact connection until release_reserved() is
+-- called, guaranteeing BEGIN/.../COMMIT all run on one physical connection.
+function BaseAdapter:reserve_connection()
+    local key = current_thread_key()
+    self._reserved = self._reserved or {}
+    if self._reserved[key] then
+        return nil, "A database transaction is already active on this thread"
+    end
+    local conn, env = self:get_connection()
+    if not conn then return nil, env end
+    self._reserved[key] = { conn = conn, env = env }
+    return conn, env
+end
+
+-- Ends the reservation started by reserve_connection() and returns the
+-- connection to the pool. If rollback_if_open is true, a defensive ROLLBACK
+-- is issued first so a connection is never pooled while sitting inside an
+-- aborted or otherwise unfinished transaction.
+function BaseAdapter:release_reserved(rollback_if_open)
+    local key = current_thread_key()
+    if not self._reserved then return end
+    local r = self._reserved[key]
+    self._reserved[key] = nil
+    if not r then return end
+    if rollback_if_open then
+        local ok, rolled_back = pcall(function() return r.conn:execute("ROLLBACK") end)
+        if not ok or not rolled_back then
+            if r.conn and r.conn.close then pcall(r.conn.close, r.conn) end
+            if r.env and r.env.close then pcall(r.env.close, r.env) end
+            return
+        end
+    end
+    self:_pool_release(r.conn, r.env)
 end
 
 -- SQL Syntax & Types (Centralized from migrate.lua)
@@ -255,39 +360,8 @@ function BaseAdapter:async_query(sql, bindings)
     return res, err
 end
 
-function BaseAdapter:async_insert(sql, bindings)
-    -- Let's run execute_async, but we need the ID.
-    -- If execute_async releases the connection, we can't get the ID reliably on SQLite.
-    -- Let's do a direct approach for async_insert
-    local conn, env = self:get_connection()
-    if not conn then return nil, "No connection" end
-    
-    local final_sql = (self.escape_params and self:escape_params(conn, sql, bindings)) or sql
-    local ok, err = conn:execute(final_sql)
-    if not ok then
-        self:release_connection(conn, env)
-        return nil, err
-    end
-
-    local driver = self.get_driver_name and self:get_driver_name() or "sqlite"
-    local id_query = "SELECT last_insert_rowid() as id"
-    if driver == "mysql" then id_query = "SELECT LAST_INSERT_ID() as id"
-    elseif driver == "postgres" then id_query = "SELECT lastval() as id" end
-
-    local id_ok, cur = pcall(function() return conn:execute(id_query) end)
-    local id = nil
-    if id_ok and cur then
-        if type(cur) == "number" then
-            id = cur
-        else
-            local row = cur:fetch({}, "a")
-            id = row and (row.id or row.ID or row[1])
-            cur:close()
-        end
-    end
-
-    self:release_connection(conn, env)
-    return tonumber(id) or id
+function BaseAdapter:async_insert(sql, bindings, options)
+    return self:insert(sql, bindings, options)
 end
 
 function BaseAdapter:async_update(sql, bindings)

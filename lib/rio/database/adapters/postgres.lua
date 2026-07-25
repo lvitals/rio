@@ -140,57 +140,21 @@ function PostgresAdapter:query(sql, bindings)
     end
 end
 
-function PostgresAdapter:insert(sql, bindings)
-    local conn, env = self:get_connection()
-    if not conn then return nil, env end
+function PostgresAdapter:insert(sql, bindings, options)
+    local primary_key, pk_err = self:get_insert_primary_key(options)
+    if not primary_key then return nil, pk_err end
 
-    -- Use the unified polling execute internal helper logic
-    local function execute_with_poll(target_sql)
-        local final_sql = self:escape_params(conn, target_sql, bindings)
-        if conn.send_query and conn.getfd then
-            local ok_cq, cqueues = pcall(require, "cqueues")
-            if ok_cq and cqueues.poll then
-                local fd = conn:getfd()
-                conn:send_query(final_sql)
-                local is_busy = true
-                while is_busy do
-                    is_busy = conn:poll()
-                    if is_busy then cqueues.poll(fd, "r", 0.01) end
-                end
-                
-                local all_res = {}
-                local final_err = nil
-                while true do
-                    local r, e = conn:get_result()
-                    if r == nil and e == nil then break end
-                    if e and not final_err then final_err = e end
-                    if r then table.insert(all_res, r) end
-                end
-                return all_res, final_err
-            end
-        end
-        local r, e = conn:execute(final_sql)
-        return r and {r} or nil, e
+    local target_sql = self:append_returning_clause(sql, primary_key)
+    local rows, err = self:query(target_sql, bindings)
+    if not rows then return nil, err end
+
+    local row = rows[1]
+    local id = self:read_returned_insert_id(row, primary_key)
+    if id == nil then
+        return nil, "PostgreSQL INSERT did not return primary key '" .. primary_key .. "'"
     end
 
-    local res_list, err = execute_with_poll(sql)
-    if not res_list then
-        self:release_connection(conn, env)
-        return nil, err
-    end
-
-    for _, res in ipairs(res_list) do
-        if type(res) == "userdata" and res.close then res:close() end
-    end
-
-    -- GET ID using the SAME connection
-    local cur_id, id_err = conn:execute("SELECT lastval() as id")
-    local row = cur_id and cur_id:fetch({}, "a")
-    local id = row and (row.id or row.ID or row[1])
-    if cur_id and type(cur_id) == "userdata" then cur_id:close() end
-
-    self:release_connection(conn, env)
-    return id and tonumber(id)
+    return self:normalize_insert_id(id)
 end
 
 function PostgresAdapter:update(sql, bindings) return self:query(sql, bindings) end
@@ -260,11 +224,15 @@ function PostgresAdapter:drop_database(db_config)
 end
 
 function PostgresAdapter.disconnect()
-    if instance and instance.pool then
-        for _, conn in ipairs(instance.pool) do
-            pcall(conn.close, conn)
+    if instance and instance.connection_pool then
+        for _, conn_pair in ipairs(instance.connection_pool) do
+            local conn = conn_pair[1]
+            local env = conn_pair[2]
+            if conn then pcall(conn.close, conn) end
+            if env and env.close then pcall(env.close, env) end
         end
-        instance.pool = {}
+        instance.connection_pool = {}
+        instance.pool_size = 0
     end
     if instance and instance.env then
         pcall(instance.env.close, instance.env)
@@ -346,7 +314,10 @@ local function get_instance(cfg)
         }, PostgresAdapter)
         instance:initialize()
     end
-    if cfg then instance.config = cfg end
+    if cfg then
+        instance.config = cfg
+        if cfg.pool then instance.MAX_POOL_SIZE = cfg.pool end
+    end
     return instance
 end
 
@@ -369,12 +340,14 @@ function M.get_migrations_by_batch(c, b) return get_instance():get_migrations_by
 function M.record_migration(c, n, b) return get_instance():record_migration(c, n, b) end
 function M.remove_migration_record(c, n) return get_instance():remove_migration_record(c, n) end
 function M.query(s, b) return get_instance():query(s, b) end
-function M.insert(s, b) return get_instance():insert(s, b) end
+function M.insert(s, b, o) return get_instance():insert(s, b, o) end
 function M.update(s, b) return get_instance():update(s, b) end
 function M.delete(s, b) return get_instance():delete(s, b) end
 function M.execute_async(sql, bindings) return get_instance():execute_async(sql, bindings) end
 function M.async_query(sql, bindings) return get_instance():async_query(sql, bindings) end
-function M.async_insert(sql, bindings) return get_instance():async_insert(sql, bindings) end
+function M.async_insert(sql, bindings, options) return get_instance():async_insert(sql, bindings, options) end
+function M.reserve_connection() return get_instance():reserve_connection() end
+function M.release_reserved(rollback_if_open) return get_instance():release_reserved(rollback_if_open) end
 function M.async_update(sql, bindings) return get_instance():async_update(sql, bindings) end
 function M.async_delete(sql, bindings) return get_instance():async_delete(sql, bindings) end
 

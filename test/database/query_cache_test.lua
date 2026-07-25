@@ -36,18 +36,17 @@ describe("ActiveRecord Query Cache", function()
         })
     end)
 
-    it("should return cached results for identical queries", function()
+    it("should return cached results for identical queries until a mutation runs", function()
         -- First query (Database hit)
         local u1 = User:all()
         assert.equals(1, #u1)
         assert.equals("Test User", u1[1].name)
 
-        -- Change DB data directly without going through ORM
+        -- Mutations through DB.query also invalidate the query cache.
         DBManager.query("UPDATE users SET name = 'New Name' WHERE id = 1")
 
-        -- Second query (Cache hit) - should still return old name
         local u2 = User:all()
-        assert.equals("Test User", u2[1].name)
+        assert.equals("New Name", u2[1].name)
     end)
 
     it("should fetch new data after clearing cache", function()
