@@ -142,7 +142,12 @@ end
 
 function PostgresAdapter:insert(sql, bindings, options)
     local primary_key, pk_err = self:get_insert_primary_key(options)
-    if not primary_key then return nil, pk_err end
+    if primary_key == nil then return nil, pk_err end
+    if primary_key == false then
+        local res, err = self:query(sql, bindings)
+        if not res then return nil, err end
+        return true
+    end
 
     local target_sql = self:append_returning_clause(sql, primary_key)
     local rows, err = self:query(target_sql, bindings)

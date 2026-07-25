@@ -246,8 +246,9 @@ function QueryBuilder:insert(data)
         table.insert(bindings, v)
     end
 
-    local primary_key = (self._model and self._model.primary_key) or "id"
-    self:_validateColumnIdentifier(primary_key)
+    local primary_key = (self._model and self._model.primary_key)
+    if primary_key == nil then primary_key = "id" end
+    if primary_key ~= false then self:_validateColumnIdentifier(primary_key) end
 
     local sql = string.format(
         "INSERT INTO %s (%s) VALUES (%s)",
@@ -258,9 +259,9 @@ function QueryBuilder:insert(data)
 
     local inserted_id, err = DBManager.insert(sql, bindings, {
         primary_key = primary_key,
-        primary_key_value = data[primary_key]
+        primary_key_value = primary_key ~= false and data[primary_key] or nil
     })
-    if inserted_id ~= nil and data[primary_key] ~= nil then
+    if primary_key ~= false and inserted_id ~= nil and data[primary_key] ~= nil then
         return data[primary_key]
     end
     return inserted_id, err

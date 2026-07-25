@@ -61,7 +61,7 @@ end
 for _, case in ipairs(ADAPTER_CASES) do
     for _, pool_size in ipairs(POOL_SIZES) do
         describe(string.format("ORM insert visibility [%s, pool=%d]", case.label, pool_size), function()
-            local DBManager, Model, QueryBuilder, Workflow, Version, Manual
+            local DBManager, Model, QueryBuilder, Workflow, Version, Manual, Source
             local available = true
 
             setup(function()
@@ -76,6 +76,7 @@ for _, case in ipairs(ADAPTER_CASES) do
                 DBManager.query("DROP TABLE IF EXISTS rio_ci_versions")
                 DBManager.query("DROP TABLE IF EXISTS rio_ci_workflows")
                 DBManager.query("DROP TABLE IF EXISTS rio_ci_manual")
+                DBManager.query("DROP TABLE IF EXISTS rio_ci_sources")
                 DBManager.query(string.format([[
                     CREATE TABLE rio_ci_workflows (
                         %s,
@@ -93,6 +94,16 @@ for _, case in ipairs(ADAPTER_CASES) do
                     CREATE TABLE rio_ci_manual (
                         code VARCHAR(64) PRIMARY KEY,
                         name VARCHAR(255) NOT NULL
+                    )
+                ]])
+                DBManager.query([[
+                    CREATE TABLE rio_ci_sources (
+                        message_id INTEGER NOT NULL,
+                        source_type VARCHAR(255) NOT NULL,
+                        source_id VARCHAR(255) NOT NULL,
+                        title VARCHAR(255),
+                        score FLOAT,
+                        metadata_json TEXT
                     )
                 ]])
 
@@ -114,6 +125,12 @@ for _, case in ipairs(ADAPTER_CASES) do
                     fillable = { "code", "name" },
                     timestamps = false,
                 })
+                Source = Model:extend({
+                    table_name = "rio_ci_sources",
+                    primary_key = false,
+                    fillable = { "message_id", "source_type", "source_id", "title", "score", "metadata_json" },
+                    timestamps = false,
+                })
             end)
 
             teardown(function()
@@ -121,6 +138,7 @@ for _, case in ipairs(ADAPTER_CASES) do
                 DBManager.query("DROP TABLE IF EXISTS rio_ci_versions")
                 DBManager.query("DROP TABLE IF EXISTS rio_ci_workflows")
                 DBManager.query("DROP TABLE IF EXISTS rio_ci_manual")
+                DBManager.query("DROP TABLE IF EXISTS rio_ci_sources")
                 DBManager.disconnect()
                 if case.name == "sqlite" and case.database and case.database ~= ":memory:" then
                     os.remove(case.database)
@@ -133,6 +151,7 @@ for _, case in ipairs(ADAPTER_CASES) do
                 DBManager.query("DELETE FROM rio_ci_versions")
                 DBManager.query("DELETE FROM rio_ci_workflows")
                 DBManager.query("DELETE FROM rio_ci_manual")
+                DBManager.query("DELETE FROM rio_ci_sources")
             end)
 
             it("keeps consecutive Model:save inserts immediately visible", function()
@@ -184,6 +203,39 @@ for _, case in ipairs(ADAPTER_CASES) do
                 local found = Manual:find("manual-key-1")
                 assert.is_not_nil(found)
                 assert.equals("Manual", found.name)
+            end)
+
+            it("supports Model:save on tables without a primary key", function()
+                if not available then return end
+
+                for i = 1, ITERATIONS do
+                    local source = Source:new({
+                        message_id = i,
+                        source_type = "knowledge_chunk",
+                        source_id = "chunk-" .. i,
+                        title = "Source " .. i,
+                        score = i / 10,
+                        metadata_json = "{\"section\":\"body\"}",
+                    })
+
+                    assert.is_true(source:save())
+                    assert.is_true(source._exists)
+                    assert.is_nil(source.id)
+
+                    local raw = DBManager.query(
+                        "SELECT title FROM rio_ci_sources WHERE message_id = ? AND source_id = ?",
+                        { i, "chunk-" .. i }
+                    )
+                    assert.equals(1, #raw)
+                    assert.equals("Source " .. i, raw[1].title)
+
+                    local qb = QueryBuilder.table("rio_ci_sources")
+                        :where("message_id", i)
+                        :where("source_id", "chunk-" .. i)
+                        :first()
+                    assert.is_not_nil(qb)
+                    assert.equals("knowledge_chunk", qb.source_type)
+                end
             end)
 
             it("pins transaction work to one connection and reuses cleanly after rollback", function()

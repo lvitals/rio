@@ -52,6 +52,7 @@ function BaseAdapter:validate_column_identifier(identifier)
 end
 
 function BaseAdapter:get_insert_primary_key(options)
+    if options and options.primary_key == false then return false end
     local primary_key = (options and options.primary_key) or "id"
     return self:validate_column_identifier(primary_key)
 end

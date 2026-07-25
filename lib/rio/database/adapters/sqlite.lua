@@ -226,14 +226,23 @@ function SQLiteAdapter:insert(sql, bindings, options)
     if not conn then return nil, env end
 
     local primary_key, pk_err = self:get_insert_primary_key(options)
-    if not primary_key then
+    if primary_key == nil then
         self:release_connection(conn, env)
         return nil, pk_err
     end
 
     local explicit_id = self:get_explicit_primary_key_value(options)
     local id = nil
-    if self:supports_returning(conn) then
+    if primary_key == false then
+        local final_sql = self:escape_params(conn, sql, bindings)
+        local _, err = execute_cooperative(conn, final_sql)
+        if err then
+            self:release_connection(conn, env)
+            return nil, err
+        end
+        self:release_connection(conn, env)
+        return true
+    elseif self:supports_returning(conn) then
         local returning_sql = self:append_returning_clause(sql, primary_key)
         local final_sql = self:escape_params(conn, returning_sql, bindings)
         local cur, err = execute_cooperative(conn, final_sql)

@@ -150,6 +150,11 @@ end
 function MySQLAdapter:insert(sql, bindings, options)
     local conn, env = self:get_connection()
     if not conn then return nil, env end
+    local primary_key, pk_err = self:get_insert_primary_key(options)
+    if primary_key == nil then
+        self:release_connection(conn, env)
+        return nil, pk_err
+    end
     local explicit_id = self:get_explicit_primary_key_value(options)
     
     local final_sql = self:escape_params(conn, sql, bindings)
@@ -157,6 +162,11 @@ function MySQLAdapter:insert(sql, bindings, options)
     if err then
         self:release_connection(conn, env)
         return nil, err
+    end
+
+    if primary_key == false then
+        self:release_connection(conn, env)
+        return true
     end
 
     if explicit_id ~= nil then

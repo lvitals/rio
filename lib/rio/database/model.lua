@@ -40,10 +40,13 @@ end
 local Model = {}
 
 function Model:extend(config)
+    local primary_key = "id"
+    if config and config.primary_key ~= nil then primary_key = config.primary_key end
+
     local methods = {
         _relations = {},
         table_name = config and config.table_name,
-        primary_key = (config and config.primary_key) or "id",
+        primary_key = primary_key,
         timestamps = not (config and config.timestamps == false),
         fillable = (config and config.fillable) or {},
         hidden = (config and config.hidden) or {},
@@ -399,7 +402,14 @@ function Model:_create()
     if self.class.timestamps then self.created_at = os.date("%Y-%m-%d %H:%M:%S"); self.updated_at = self.created_at end
     local data = self:_filterAttributes(self._attributes)
     local id = self:query():insert(data)
-    if id ~= nil then self[self.primary_key or "id"] = id; self._exists = true; self._original = self:_copy(self._attributes); return true end
+    if id ~= nil then
+        local pk = self.primary_key
+        if pk == nil then pk = "id" end
+        if pk ~= false and id ~= true then self[pk] = id end
+        self._exists = true
+        self._original = self:_copy(self._attributes)
+        return true
+    end
     return false
 end
 
@@ -408,7 +418,14 @@ function Model:_async_create()
     if self.class.timestamps then self.created_at = os.date("%Y-%m-%d %H:%M:%S"); self.updated_at = self.created_at end
     local data = self:_filterAttributes(self._attributes)
     local id = self:query():async_insert(data)
-    if id ~= nil then self[self.primary_key or "id"] = id; self._exists = true; self._original = self:_copy(self._attributes); return true end
+    if id ~= nil then
+        local pk = self.primary_key
+        if pk == nil then pk = "id" end
+        if pk ~= false and id ~= true then self[pk] = id end
+        self._exists = true
+        self._original = self:_copy(self._attributes)
+        return true
+    end
     return false
 end
 
