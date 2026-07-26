@@ -30,7 +30,7 @@ RUN luarocks --lua-version=5.4 install busted \
     && luarocks --lua-version=5.4 install bestline \
     && luarocks --lua-version=5.4 make rio-dev-1.rockspec --only-deps
 
-RUN git clone --depth 1 --branch feat/mysql-async-get-result https://github.com/lvitals/luasql.git /tmp/luasql \
+RUN git clone --depth 1 --branch master https://github.com/lunarmodules/luasql.git /tmp/luasql \
     && cd /tmp/luasql \
     && luarocks --lua-version=5.4 make rockspec/luasql-postgres-2.8.0-1.rockspec PGSQL_INCDIR=/usr/include/postgresql \
     && luarocks --lua-version=5.4 make rockspec/luasql-mysql-2.8.0-1.rockspec MYSQL_INCDIR=/usr/include/mariadb MYSQL_LIBDIR=/usr/lib/x86_64-linux-gnu \
