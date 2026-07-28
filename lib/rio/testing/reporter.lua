@@ -5,7 +5,7 @@ local WarningRegistry = require("rio.testing.warning_registry")
 local M = {}
 
 local ANSI_PATTERN = "\27%[[%d;?]*[mKhlABCDEFGJKST]"
-local DEFAULT_SUITE = "Tests"
+local DEFAULT_SUITE = "Other"
 local SCHEMA_VERSION = 1
 
 local adapter_labels = {
@@ -23,7 +23,8 @@ local acronyms = {
     json = "JSON",
     jwt = "JWT",
     mysql = "MySQL",
-    postgres = "Postgres",
+    postgres = "PostgreSQL",
+    postgresql = "PostgreSQL",
     sql = "SQL",
     sqlite = "SQLite",
     ui = "UI"

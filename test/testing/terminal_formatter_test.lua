@@ -36,7 +36,7 @@ describe("Rio terminal test formatter", function()
         local first_value = "3.8x faster"
         local second_label = "Concurrency throughput"
         local second_value = "2652.24 req/s"
-        local long_label = "Postgres multi statement statement throughput"
+        local long_label = "PostgreSQL multi statement statement throughput"
         local long_value = "4884.40 stmt/s"
 
         local output = capture_prints(function()

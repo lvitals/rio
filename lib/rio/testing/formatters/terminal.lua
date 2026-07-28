@@ -27,14 +27,6 @@ end
 
 local function pad_right(value, width)
     value = tostring(value or "")
-    if #value >= width then
-        return value:sub(1, width)
-    end
-    return value .. string.rep(" ", width - #value)
-end
-
-local function pad_right_full(value, width)
-    value = tostring(value or "")
     local length = ui.visible_len(value)
     if length >= width then
         return value
@@ -154,7 +146,7 @@ function M.performance(summary)
     for _, metric in ipairs(summary.performance) do
         local label = metric.display_label or metric.label
         print("  "
-            .. pad_right_full(label, label_width)
+            .. pad_right(label, label_width)
             .. COLUMN_SEPARATOR
             .. colorize(colors.cyan, metric.value))
     end

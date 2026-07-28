@@ -59,6 +59,7 @@ describe("Rio testing reporter", function()
 
     it("keeps repeated performance metric names with their section context", function()
         local storage_section = "SQLITE CONNECTIVITY INFO"
+        local postgres_section = "POSTGRES PERFORMANCE (SINGLE STATEMENT)"
         local cache_section = "QUERY CACHE PERFORMANCE (LEVEL 1)"
         local concurrency_section = "HIGH CONCURRENCY BENCHMARK"
         local request_metric = "Throughput (Req/s)"
@@ -70,6 +71,8 @@ describe("Rio testing reporter", function()
             "│                           " .. storage_section .. "                           │",
             "│  ✓ PASS " .. request_metric .. "              │ 148703.14                         │",
             "│  ✓ PASS " .. statement_metric .. "             │ 73411.91                          │",
+            "│                           " .. postgres_section .. "                           │",
+            "│  ✓ PASS " .. request_metric .. "              │ 1910.21                          │",
             "│                      " .. cache_section .. "                       │",
             "│  ✓ PASS " .. speedup_metric .. "                   │ 6.8x faster                       │",
             "│                          " .. concurrency_section .. "                          │",
@@ -79,7 +82,7 @@ describe("Rio testing reporter", function()
 
         local summary = reporter.build(output, 0)
 
-        assert.equals(4, #summary.performance)
+        assert.equals(5, #summary.performance)
         assert.equals(storage_section, summary.performance[1].suite)
         assert.equals(request_metric, summary.performance[1].label)
         assert.equals("SQLite request throughput", summary.performance[1].display_label)
@@ -87,18 +90,28 @@ describe("Rio testing reporter", function()
         assert.equals(statement_metric, summary.performance[2].label)
         assert.equals("SQLite statement throughput", summary.performance[2].display_label)
         assert.equals("73411.91 stmt/s", summary.performance[2].value)
-        assert.equals(cache_section, summary.performance[3].suite)
-        assert.equals(speedup_metric, summary.performance[3].label)
-        assert.equals("Query cache speedup", summary.performance[3].display_label)
-        assert.equals(concurrency_section, summary.performance[4].suite)
-        assert.equals(throughput_metric, summary.performance[4].label)
-        assert.equals("High concurrency throughput", summary.performance[4].display_label)
+        assert.equals(postgres_section, summary.performance[3].suite)
+        assert.equals(request_metric, summary.performance[3].label)
+        assert.equals("PostgreSQL single statement request throughput", summary.performance[3].display_label)
+        assert.equals("1910.21 req/s", summary.performance[3].value)
+        assert.equals(cache_section, summary.performance[4].suite)
+        assert.equals(speedup_metric, summary.performance[4].label)
+        assert.equals("Query cache speedup", summary.performance[4].display_label)
+        assert.equals(concurrency_section, summary.performance[5].suite)
+        assert.equals(throughput_metric, summary.performance[5].label)
+        assert.equals("High concurrency throughput", summary.performance[5].display_label)
     end)
 
     it("uses a specific group for reporter infrastructure tests", function()
         local summary = reporter.build([[{"duration":0,"successes":[{"name":"reporter ok","trace":{"short_src":"test/testing/reporter_test.lua"},"element":{"duration":0.01}}],"failures":[],"errors":[],"pendings":[]}]], 0)
 
         assert.equals(1, summary.groups.Testing.tests)
+    end)
+
+    it("uses Other for sources outside a known test path", function()
+        local summary = reporter.build([[{"duration":0,"successes":[{"name":"inline ok","trace":{"short_src":"spec.lua"},"element":{"duration":0.01}}],"failures":[],"errors":[],"pendings":[]}]], 0)
+
+        assert.equals(1, summary.groups.Other.tests)
     end)
 
     it("reports unparseable failing output as an error", function()

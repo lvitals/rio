@@ -8,8 +8,12 @@ end
 
 local DBManager = require("rio.database.manager")
 local Model = require("rio.database.model")
+local RioUI = _G.RioUI or require("rio.utils.ui")
 
 DBManager.verbose = false -- Silence DB logs during tests
+
+local QUERY_CACHE_BENCHMARK_ITERATIONS =
+    tonumber(os.getenv("RIO_TEST_QUERY_CACHE_ITERATIONS")) or 500
 
 describe("ActiveRecord Query Cache", function()
     local User
@@ -69,6 +73,36 @@ describe("ActiveRecord Query Cache", function()
         assert.equals("No Cache", u[1].name)
     end)
 
+    it("should avoid repeated database queries for identical cached reads", function()
+        local original_query = DBManager.query
+        local select_count = 0
+
+        DBManager.query = function(sql, bindings)
+            if tostring(sql or ""):lower():match("^%s*select") then
+                select_count = select_count + 1
+            end
+
+            return original_query(sql, bindings)
+        end
+
+        local ok, err = xpcall(function()
+            local first = User:all()
+            local second = User:all()
+
+            assert.equals(1, #first)
+            assert.equals(1, #second)
+            assert.equals("Test User", first[1].name)
+            assert.equals("Test User", second[1].name)
+            assert.equals(1, select_count)
+        end, debug.traceback)
+
+        DBManager.query = original_query
+
+        if not ok then
+            error(err, 0)
+        end
+    end)
+
     describe("Performance Information", function()
         it("should report query cache timing information", function()
             -- Warm up / Initial hit
@@ -77,18 +111,26 @@ describe("ActiveRecord Query Cache", function()
             -- Measure No Cache (bypass)
             DBManager.query_cache_enabled = false
             local start_no_cache = os.clock()
-            for i=1, 500 do User:all() end
+            for _ = 1, QUERY_CACHE_BENCHMARK_ITERATIONS do User:all() end
             local time_no_cache = os.clock() - start_no_cache
 
             -- Measure Cache Hit
             DBManager.query_cache_enabled = true
             local start_cache = os.clock()
-            for i=1, 500 do User:all() end
+            for _ = 1, QUERY_CACHE_BENCHMARK_ITERATIONS do User:all() end
             local time_cache = os.clock() - start_cache
 
             RioUI.box("Query Cache Performance (Level 1)", function()
-                RioUI.status("No Cache (500 queries)", true, string.format("%.6fs", time_no_cache))
-                RioUI.status("Cache Hit (500 queries)", true, string.format("%.6fs", time_cache))
+                RioUI.status(
+                    string.format("No Cache (%d queries)", QUERY_CACHE_BENCHMARK_ITERATIONS),
+                    true,
+                    string.format("%.6fs", time_no_cache)
+                )
+                RioUI.status(
+                    string.format("Cache Hit (%d queries)", QUERY_CACHE_BENCHMARK_ITERATIONS),
+                    true,
+                    string.format("%.6fs", time_cache)
+                )
                 if time_cache > 0 then
                     RioUI.status("Speedup Factor", true, string.format("%.1fx faster", time_no_cache / time_cache))
                 end
