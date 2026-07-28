@@ -7,7 +7,8 @@ local project_paths = require("rio.cli.project_paths")
 local M = {}
 
 local BUSTED_EXECUTABLE = "busted"
-local BUSTED_OUTPUT_FORMAT = "utfTerminal"
+local DEFAULT_BUSTED_OUTPUT_FORMAT = "utfTerminal"
+local CAPTURED_BUSTED_OUTPUT_FORMAT = "json"
 local BUSTED_HELPER = "test/spec_helper.lua"
 local DEFAULT_TEST_TARGET = "test/"
 local DEFAULT_TEST_PATTERN = "_test.lua$"
@@ -34,6 +35,33 @@ function M.default_args()
         DEFAULT_TEST_TARGET,
         "--pattern=" .. DEFAULT_TEST_PATTERN
     }
+end
+
+function M.parse_args(args)
+    local options = {
+        format = "terminal",
+        verbose = false,
+        quiet = false,
+        debug = false
+    }
+    local busted_args = {}
+
+    for _, arg in ipairs(args or {}) do
+        if arg == "--verbose" then
+            options.verbose = true
+        elseif arg == "--quiet" then
+            options.quiet = true
+        elseif arg == "--debug" then
+            options.debug = true
+            options.verbose = true
+        elseif tostring(arg):match("^%-%-format=") then
+            options.format = tostring(arg):match("^%-%-format=(.+)$") or options.format
+        else
+            table.insert(busted_args, arg)
+        end
+    end
+
+    return options, busted_args
 end
 
 function M.detect_executable_path(fallback_path, capture)
@@ -86,12 +114,16 @@ function M.build(options)
     local busted_args = {
         BUSTED_EXECUTABLE,
         "--lua=" .. shell.quote(options.lua_bin or "lua"),
-        "--output=" .. shell.quote(BUSTED_OUTPUT_FORMAT),
+        "--output=" .. shell.quote(options.output_format or DEFAULT_BUSTED_OUTPUT_FORMAT),
         "--helper=" .. shell.quote(BUSTED_HELPER)
     }
 
     table.insert(command_parts, table.concat(busted_args, " ") .. " " .. shell.quote_args(test_args))
     return shell.join_commands(command_parts)
+end
+
+function M.captured_output_format()
+    return CAPTURED_BUSTED_OUTPUT_FORMAT
 end
 
 return M

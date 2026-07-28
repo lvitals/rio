@@ -74,6 +74,14 @@ local function get_terminal_width()
     return math.max(40, math.min(80, cols))
 end
 
+function M.visible_len(value)
+    return get_visible_len(value)
+end
+
+function M.terminal_width()
+    return get_terminal_width()
+end
+
 local function process_text_lines(text)
     local lines = {}
     for line in string.gmatch(tostring(text) .. "\n", "(.-)\n") do

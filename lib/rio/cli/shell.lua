@@ -5,6 +5,7 @@ local M = {}
 
 local COMMAND_SEPARATOR = " && "
 local ENV_EXPORT_FORMAT = "export %s=%s"
+local STDERR_REDIRECT = " 2>&1"
 
 function M.quote(value)
     return "'" .. tostring(value or ""):gsub("'", [['"'"']]) .. "'"
@@ -46,6 +47,18 @@ function M.execute(command)
     local ok, exit_type, code = os.execute(command)
     local status_code = M.status_code(ok, exit_type, code)
     return status_code == 0, status_code
+end
+
+function M.capture(command)
+    local handle = assert(io.popen(command .. STDERR_REDIRECT, "r"))
+    local output = handle:read("*a")
+    local ok, exit_type, code = handle:close()
+    local status_code = M.status_code(ok, exit_type, code)
+    return {
+        ok = status_code == 0,
+        code = status_code,
+        output = output or ""
+    }
 end
 
 return M

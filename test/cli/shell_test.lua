@@ -85,6 +85,22 @@ describe("Rio CLI shell command helpers", function()
         contains(command, shell.quote(filter_arg))
     end)
 
+    it("parses rio test reporter options separately from busted arguments", function()
+        local options, busted_args = test_command.parse_args({
+            "--quiet",
+            "--format=json",
+            "--verbose",
+            "test/cli",
+            "--filter",
+            "shell"
+        })
+
+        assert.is_true(options.quiet)
+        assert.is_true(options.verbose)
+        assert.equals("json", options.format)
+        assert.same({ "test/cli", "--filter", "shell" }, busted_args)
+    end)
+
     it("normalizes signal exits using POSIX exit code convention", function()
         assert.equals(130, shell.status_code(nil, "signal", 2))
     end)
@@ -94,18 +110,24 @@ describe("Rio CLI shell command helpers", function()
     end)
 
     it("returns busted failures without terminating the process", function()
-        local original_execute = shell.execute
+        local original_capture = shell.capture
         local original_detect_executable_path = test_command.detect_executable_path
+        local original_print = _G.print
         local captured_command
 
         local ok, err = xpcall(function()
-            shell.execute = function(command)
+            shell.capture = function(command)
                 captured_command = command
-                return false, 23
+                return {
+                    ok = false,
+                    code = 23,
+                    output = [[{"duration":0,"successes":[],"failures":[{"name":"Fixture failure","message":"failed"}],"errors":[],"pendings":[]}]]
+                }
             end
             test_command.detect_executable_path = function(fallback_path)
                 return fallback_path
             end
+            _G.print = function() end
 
             local success, exit_code = test_cli_command.run({
                 ui = { header = function() end },
@@ -113,11 +135,50 @@ describe("Rio CLI shell command helpers", function()
                 get_lua_paths = function()
                     return "/rocks/share/?.lua", "/rocks/lib/?.so"
                 end
-            }, { "test/failing_test.lua" })
+            }, { "--format=json", "test/failing_test.lua" })
 
             assert.is_false(success)
             assert.equals(23, exit_code)
             contains(captured_command, shell.quote("test/failing_test.lua"))
+        end, debug.traceback)
+
+        shell.capture = original_capture
+        test_command.detect_executable_path = original_detect_executable_path
+        _G.print = original_print
+
+        if not ok then
+            error(err, 0)
+        end
+    end)
+
+    it("keeps verbose runs on Busted terminal output", function()
+        local original_execute = shell.execute
+        local original_detect_executable_path = test_command.detect_executable_path
+        local captured_command
+
+        local ok, err = xpcall(function()
+            shell.execute = function(command)
+                captured_command = command
+                return true, 0
+            end
+            test_command.detect_executable_path = function(fallback_path)
+                return fallback_path
+            end
+
+            local success, exit_code = test_cli_command.run({
+                ui = {
+                    header = function() end,
+                    info = function() end
+                },
+                framework_lib_path = "/rio/lib/?.lua",
+                get_lua_paths = function()
+                    return "/rocks/share/?.lua", "/rocks/lib/?.so"
+                end
+            }, { "--verbose", "test/cli/shell_test.lua" })
+
+            assert.is_true(success)
+            assert.equals(0, exit_code)
+            contains(captured_command, "--output=" .. shell.quote("utfTerminal"))
         end, debug.traceback)
 
         shell.execute = original_execute

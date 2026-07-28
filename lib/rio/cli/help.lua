@@ -74,11 +74,11 @@ end
 
 function M.test(ctx)
     ctx.ui.header("Test Runner")
-    ctx.ui.line("Usage: rio test [busted_options]", ctx.colors.yellow)
+    ctx.ui.line("Usage: rio test [options] [busted_options]", ctx.colors.yellow)
 
-    ctx.ui.info("Runs Busted tests found in the test/ directory.")
-    ctx.ui.info("Additional arguments are passed directly to busted.")
-    ctx.ui.line("Example: rio test --verbose", ctx.colors.dim)
+    ctx.ui.info("Runs Busted tests with Rio's compact reporter by default.")
+    ctx.ui.info("Use --verbose for raw Busted output, --quiet for summary-only output, or --format=json for automation.")
+    ctx.ui.line("Example: rio test test/cli --verbose", ctx.colors.dim)
 end
 
 function M.db(ctx)

@@ -7,6 +7,7 @@ if not describe then
 end
 
 local ui = require("rio.utils.ui")
+local terminal_formatter = require("rio.testing.formatters.terminal")
 
 local function strip_ansi(s)
     return tostring(s):gsub("\27%[[%d;?]*[mKhlABCDEFGJKST]", "")
@@ -32,6 +33,23 @@ local function capture_prints(fn)
 end
 
 describe("Rio UI Utils", function()
+    it("measures visible text length without ANSI escape codes", function()
+        assert.equals(4, ui.visible_len(ui.colors.green .. "PASS" .. ui.colors.reset))
+    end)
+
+    it("keeps test runner header values padded inside the box", function()
+        local output = capture_prints(function()
+            terminal_formatter.header({
+                version = "0.1.21",
+                lua_version = "Lua 5.4",
+                environment = "test"
+            })
+        end)
+
+        assert.truthy(output:find("v0.1.21 │", 1, true))
+        assert.is_nil(output:find("v0.1.21│", 1, true))
+    end)
+
     it("wraps long status details instead of truncating them", function()
         local detail = table.concat({
             "module/path/component.lua:17",

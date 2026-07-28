@@ -162,6 +162,6 @@ describe("Rio CLI Command Dispatch", function()
 
         assert.is_false(result.ok)
         assert.equals(1, result.code)
-        assert.truthy(result.output:find("1 failure", 1, true))
+        assert.truthy(result.output:find("Test run failed", 1, true))
     end)
 end)
