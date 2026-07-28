@@ -59,7 +59,12 @@ function Registry:dispatch(invocation, context)
         return false
     end
 
-    return command:execute(invocation, context) ~= false
+    local ok, exit_code = command:execute(invocation, context)
+    if ok == false then
+        return true, false, exit_code
+    end
+
+    return true, true, exit_code
 end
 
 function M.with_defaults(extra_modules)

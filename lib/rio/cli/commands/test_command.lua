@@ -15,6 +15,10 @@ local TEST_ENV = "test"
 local FAST_HASH_ITERATIONS = "1"
 local DETECT_LUAROCKS_PATH_COMMAND = "eval \"$(luarocks path --bin 2>/dev/null)\" && printf '%s' \"$PATH\""
 
+local function trim(value)
+    return tostring(value or ""):match("^%s*(.-)%s*$")
+end
+
 local function append_lua_paths(paths)
     local resolved = {}
     for _, path in ipairs(paths or {}) do
@@ -41,7 +45,7 @@ function M.detect_executable_path(fallback_path, capture)
         return fallback_path
     end
 
-    local detected_path = handle:read("*a")
+    local detected_path = trim(handle:read("*a"))
     local ok = handle:close()
 
     if ok and detected_path and detected_path ~= "" then

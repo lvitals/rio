@@ -26,8 +26,12 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
     end
 
     local registry = cli_registry.with_defaults()
-    if registry:dispatch(invocation, context) then
-        return
+    local handled, ok, exit_code = registry:dispatch(invocation, context)
+    if handled then
+        if ok == false then
+            return false, exit_code or 1
+        end
+        return true, exit_code or 0
     end
 
     ui.status("CLI command", false, "Unknown command '" .. tostring(invocation.full_command) .. "'")

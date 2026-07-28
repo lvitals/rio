@@ -7,6 +7,7 @@ package.path = "./?.lua;./?/init.lua;lib/?.lua;lib/?/init.lua;" .. package.path
 
 local shell = require("rio.cli.shell")
 local test_command = require("rio.cli.commands.test_command")
+local test_cli_command = require("rio.cli.commands.test")
 
 describe("Rio CLI shell command helpers", function()
     local function fake_capture(output, close_ok)
@@ -23,12 +24,12 @@ describe("Rio CLI shell command helpers", function()
     end
 
     it("quotes shell arguments without allowing argument splitting", function()
-        local value = "creates user's account"
-        local quoted = shell.quote(value)
-
-        contains(quoted, "creates ")
-        contains(quoted, [["'"']])
-        contains(quoted, "s account")
+        assert.equals("''", shell.quote(""))
+        assert.equals("'hello world'", shell.quote("hello world"))
+        assert.equals([['a'"'"'b']], shell.quote("a'b"))
+        assert.equals("'$HOME'", shell.quote("$HOME"))
+        assert.equals("'a; rm -rf x'", shell.quote("a; rm -rf x"))
+        assert.equals("'a && b | c * ?'", shell.quote("a && b | c * ?"))
     end)
 
     it("uses the fully expanded LuaRocks PATH when it is available", function()
@@ -38,7 +39,7 @@ describe("Rio CLI shell command helpers", function()
 
         assert.equals(
             detected_path,
-            test_command.detect_executable_path(fallback_path, fake_capture(detected_path))
+            test_command.detect_executable_path(fallback_path, fake_capture(detected_path .. "\n"))
         )
     end)
 
@@ -82,5 +83,44 @@ describe("Rio CLI shell command helpers", function()
         contains(command, framework_lua_path)
         contains(command, shell.quote(test_target))
         contains(command, shell.quote(filter_arg))
+    end)
+
+    it("normalizes signal exits using POSIX exit code convention", function()
+        assert.equals(130, shell.status_code(nil, "signal", 2))
+    end)
+
+    it("returns busted failures without terminating the process", function()
+        local original_execute = shell.execute
+        local original_detect_executable_path = test_command.detect_executable_path
+        local captured_command
+
+        local ok, err = xpcall(function()
+            shell.execute = function(command)
+                captured_command = command
+                return false, 23
+            end
+            test_command.detect_executable_path = function(fallback_path)
+                return fallback_path
+            end
+
+            local success, exit_code = test_cli_command.run({
+                ui = { header = function() end },
+                framework_lib_path = "/rio/lib/?.lua",
+                get_lua_paths = function()
+                    return "/rocks/share/?.lua", "/rocks/lib/?.so"
+                end
+            }, { "test/failing_test.lua" })
+
+            assert.is_false(success)
+            assert.equals(23, exit_code)
+            contains(captured_command, shell.quote("test/failing_test.lua"))
+        end, debug.traceback)
+
+        shell.execute = original_execute
+        test_command.detect_executable_path = original_detect_executable_path
+
+        if not ok then
+            error(err, 0)
+        end
     end)
 end)

@@ -24,10 +24,10 @@ function M.run(ctx, test_args)
 
     local ok, exit_code = shell.execute(command)
     if not ok then
-        os.exit(exit_code)
+        return false, exit_code
     end
 
-    return true
+    return true, 0
 end
 
 function M.command()

@@ -27,9 +27,12 @@ function M.join_commands(commands)
     return table.concat(commands or {}, COMMAND_SEPARATOR)
 end
 
-function M.status_code(ok, _, code)
+function M.status_code(ok, exit_type, code)
     if ok == true then return 0 end
     if type(ok) == "number" then return ok end
+    if exit_type == "signal" and type(code) == "number" then
+        return 128 + code
+    end
     if type(code) == "number" then return code end
     return 1
 end

@@ -26,13 +26,18 @@ local rio_framework_lib_path = script_dir .. "../lib/?.lua;" .. script_dir .. ".
 package.path = rio_framework_lib_path .. ";" .. package.path
 
 local cli = require("rio.cli")
-local status, err = pcall(cli.run, arg, rio_framework_lib_path, absolute_script_path) -- Pass the framework's lib path and bin path
+local status, ok, exit_code = pcall(cli.run, arg, rio_framework_lib_path, absolute_script_path) -- Pass the framework's lib path and bin path
 
 if not status then
+    local err = ok
     if err and type(err) == "string" and (err:find("interrupted!") or err:find("interrupt")) then
         print("\n" .. (cli.colors and cli.colors.yellow or "") .. "Interrupted. Exiting..." .. (cli.colors and cli.colors.reset or ""))
         os.exit(130) -- Standard exit code for SIGINT
     else
         error(err)
     end
+end
+
+if ok == false then
+    os.exit(exit_code or 1)
 end
