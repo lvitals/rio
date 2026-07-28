@@ -51,16 +51,16 @@ describe("Rio CLI Database Services", function()
         package.path = helpers.repo_root() .. "/lib/?.lua;" .. helpers.repo_root() .. "/lib/?/init.lua"
         local active_package_path = package.path
 
-        local ok, err = pcall(function()
+        local ok, err = xpcall(function()
             assert.truthy(lfs.chdir(root))
             callback(root, active_package_path)
-        end)
+        end, debug.traceback)
 
-        lfs.chdir(original_dir)
+        assert.truthy(lfs.chdir(original_dir))
         package.path = original_package_path
         helpers.remove_tree(root)
 
-        if not ok then error(err, 2) end
+        if not ok then error(err, 0) end
     end
 
     it("loads project database config and allows local requires when LuaRocks package.path omits the current directory", function()

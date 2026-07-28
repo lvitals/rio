@@ -98,7 +98,7 @@ return MigrationUnderTest
 
         local executed_sql
         local recorded_name
-        local ok, err = pcall(function()
+        local ok, err = xpcall(function()
             assert.truthy(lfs.chdir(root))
             package.path = project_paths.lua_path() .. ";" .. project_paths.lua_path(helpers.repo_root()) .. ";" .. package.path
 
@@ -126,16 +126,16 @@ return MigrationUnderTest
 
             assert.equals(create_table_sql, executed_sql)
             assert.equals(migration_name, recorded_name)
-        end)
+        end, debug.traceback)
 
         DBManager.get_connection = original_get_connection
         DBManager.get_adapter_name = original_get_adapter_name
         DBManager.get_adapter = original_get_adapter
         package.loaded[module_name] = nil
+        assert.truthy(lfs.chdir(original_dir))
         package.path = original_package_path
-        lfs.chdir(original_dir)
         helpers.remove_tree(root)
 
-        if not ok then error(err, 2) end
+        if not ok then error(err, 0) end
     end)
 end)
