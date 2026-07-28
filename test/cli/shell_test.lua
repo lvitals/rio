@@ -89,16 +89,36 @@ describe("Rio CLI shell command helpers", function()
         local options, busted_args = test_command.parse_args({
             "--quiet",
             "--format=json",
-            "--verbose",
             "test/cli",
             "--filter",
             "shell"
         })
 
         assert.is_true(options.quiet)
-        assert.is_true(options.verbose)
+        assert.is_false(options.verbose)
         assert.equals("json", options.format)
         assert.same({ "test/cli", "--filter", "shell" }, busted_args)
+    end)
+
+    it("rejects unsupported rio test output formats", function()
+        local options, _, err = test_command.parse_args({ "--format=banana" })
+
+        assert.is_nil(options)
+        assert.truthy(err:find("Unknown test format", 1, true))
+    end)
+
+    it("rejects json output combined with verbose mode", function()
+        local options, _, err = test_command.parse_args({ "--format=json", "--verbose" })
+
+        assert.is_nil(options)
+        assert.truthy(err:find("cannot be combined", 1, true))
+    end)
+
+    it("lets verbose mode override quiet terminal output", function()
+        local options = assert(test_command.parse_args({ "--quiet", "--verbose" }))
+
+        assert.is_true(options.verbose)
+        assert.is_false(options.quiet)
     end)
 
     it("normalizes signal exits using POSIX exit code convention", function()

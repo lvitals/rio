@@ -26,20 +26,31 @@ local function print_json(summary)
         if cjson.encode_empty_table_as_object then
             pcall(cjson.encode_empty_table_as_object, false)
         end
-        summary.raw_output = nil
-        print(cjson.encode(summary))
-    else
-        print([[{"status":"error","message":"lua-cjson is required for --format=json"}]])
+
+        local payload = {}
+        for key, value in pairs(summary or {}) do
+            if key ~= "raw_output" then
+                payload[key] = value
+            end
+        end
+
+        print(cjson.encode(payload))
+        return true
     end
+
+    print([[{"status":"error","message":"lua-cjson is required for --format=json"}]])
+    return false
 end
 
 function M.run(ctx, test_args)
-    local options, busted_args = test_command.parse_args(test_args)
-    local effective_lua_path, effective_lua_cpath = ctx.get_lua_paths()
-    local output_format
-    if not options.verbose then
-        output_format = test_command.captured_output_format()
+    local options, busted_args, parse_error = test_command.parse_args(test_args)
+    if not options then
+        ctx.ui.status("Test command", false, parse_error)
+        return false, 1
     end
+
+    local effective_lua_path, effective_lua_cpath = ctx.get_lua_paths()
+    local output_format = test_command.output_format_for(options)
 
     local command = test_command.build({
         framework_lua_path = ctx.framework_lib_path,
@@ -78,7 +89,9 @@ function M.run(ctx, test_args)
     local summary = reporter.build(result.output, result.code)
 
     if options.format == "json" then
-        print_json(summary)
+        if not print_json(summary) then
+            return false, 1
+        end
     else
         terminal_formatter.render(summary, { quiet = options.quiet })
     end

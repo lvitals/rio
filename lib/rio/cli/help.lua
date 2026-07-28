@@ -77,7 +77,9 @@ function M.test(ctx)
     ctx.ui.line("Usage: rio test [options] [busted_options]", ctx.colors.yellow)
 
     ctx.ui.info("Runs Busted tests with Rio's compact reporter by default.")
-    ctx.ui.info("Use --verbose for raw Busted output, --quiet for summary-only output, or --format=json for automation.")
+    ctx.ui.info("Formats: --format=terminal or --format=json.")
+    ctx.ui.info("Use --quiet for summary-only terminal output or --verbose for raw Busted output.")
+    ctx.ui.info("--verbose cannot be combined with --format=json.")
     ctx.ui.line("Example: rio test test/cli --verbose", ctx.colors.dim)
 end
 

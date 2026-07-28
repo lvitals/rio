@@ -12,6 +12,7 @@ local COUNT_COLUMN = 10
 local DURATION_COLUMN = 10
 local PERFORMANCE_LABEL_COLUMN = 36
 local WARNING_MESSAGE_COLUMN = 34
+local COLUMN_SEPARATOR = "  "
 
 local function terminal_width()
     return ui.terminal_width()
@@ -128,7 +129,29 @@ function M.performance(summary)
     print("  " .. colorize(colors.blue, "Performance"))
     print("")
     for _, metric in ipairs(summary.performance) do
-        print("  " .. pad_right(metric.label, PERFORMANCE_LABEL_COLUMN) .. colorize(colors.cyan, metric.value))
+        local label = metric.display_label or metric.label
+        print("  "
+            .. pad_right(label, PERFORMANCE_LABEL_COLUMN)
+            .. COLUMN_SEPARATOR
+            .. colorize(colors.cyan, metric.value))
+    end
+end
+
+function M.environment_skips(summary)
+    if not summary.environment_skips or #summary.environment_skips == 0 then return end
+
+    print("")
+    line()
+    print("")
+    print("  " .. colorize(colors.yellow, "Skipped environments"))
+    print("")
+    for _, item in ipairs(summary.environment_skips) do
+        local occurrences = item.count > 1 and (" (" .. item.count .. " affected checks)") or ""
+        local reason = item.reason or "unavailable"
+        local detail = item.detail and (" " .. item.detail) or ""
+        print("  " .. pad_right(item.subject or item.message, 12)
+            .. pad_right(reason, 26)
+            .. colorize(colors.gray, detail .. occurrences))
     end
 end
 
@@ -179,14 +202,24 @@ function M.summary(summary)
 
     local status_color = summary.status == "passed" and colors.green or colors.red
     local status_text = summary.status == "passed" and "PASS" or "FAIL"
+    local environment_skip_count = #(summary.environment_skips or {})
     local parts = {
         tostring(summary.passed) .. " passed",
         tostring(summary.failed) .. " failed",
-        tostring(summary.errors) .. " errors",
-        tostring(summary.pending) .. " skipped",
-        tostring(#(summary.warnings or {})) .. " warnings",
-        string.format("%.3fs", summary.duration or 0)
+        tostring(summary.errors) .. " errors"
     }
+
+    if environment_skip_count > 0 then
+        table.insert(parts, tostring(environment_skip_count) .. " environments skipped")
+    else
+        table.insert(parts, tostring(summary.pending) .. " skipped")
+    end
+
+    if #(summary.warnings or {}) > 0 then
+        table.insert(parts, tostring(#(summary.warnings or {})) .. " warnings")
+    end
+
+    table.insert(parts, string.format("%.3fs", summary.duration or 0))
 
     print("  " .. table.concat(parts, " · "))
     print("")
@@ -201,6 +234,7 @@ function M.render(summary, options)
     if not quiet then
         M.groups(summary, options)
         M.performance(summary)
+        M.environment_skips(summary)
         M.warnings(summary)
     end
 

@@ -50,7 +50,16 @@ function M.execute(command)
 end
 
 function M.capture(command)
-    local handle = assert(io.popen(command .. STDERR_REDIRECT, "r"))
+    local handle, err = io.popen(command .. STDERR_REDIRECT, "r")
+    if not handle then
+        return {
+            ok = false,
+            code = 1,
+            output = "",
+            error = err or "failed to start command"
+        }
+    end
+
     local output = handle:read("*a")
     local ok, exit_type, code = handle:close()
     local status_code = M.status_code(ok, exit_type, code)

@@ -15,6 +15,10 @@ local DEFAULT_TEST_PATTERN = "_test.lua$"
 local TEST_ENV = "test"
 local FAST_HASH_ITERATIONS = "1"
 local DETECT_LUAROCKS_PATH_COMMAND = "eval \"$(luarocks path --bin 2>/dev/null)\" && printf '%s' \"$PATH\""
+local SUPPORTED_FORMATS = {
+    terminal = true,
+    json = true
+}
 
 local function trim(value)
     return tostring(value or ""):match("^%s*(.-)%s*$")
@@ -55,10 +59,21 @@ function M.parse_args(args)
             options.debug = true
             options.verbose = true
         elseif tostring(arg):match("^%-%-format=") then
-            options.format = tostring(arg):match("^%-%-format=(.+)$") or options.format
+            options.format = tostring(arg):match("^%-%-format=(.*)$") or options.format
         else
             table.insert(busted_args, arg)
         end
+    end
+
+    if options.format == "" or not SUPPORTED_FORMATS[options.format] then
+        return nil, nil, "Unknown test format: " .. tostring(options.format)
+    end
+
+    if options.verbose then
+        if options.format ~= "terminal" then
+            return nil, nil, "--format=" .. options.format .. " cannot be combined with --verbose"
+        end
+        options.quiet = false
     end
 
     return options, busted_args
@@ -123,6 +138,14 @@ function M.build(options)
 end
 
 function M.captured_output_format()
+    return CAPTURED_BUSTED_OUTPUT_FORMAT
+end
+
+function M.output_format_for(options)
+    if options and options.verbose then
+        return nil
+    end
+
     return CAPTURED_BUSTED_OUTPUT_FORMAT
 end
 

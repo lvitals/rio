@@ -17,6 +17,13 @@ local suite_labels = {
     ["test/fixtures/"] = "Fixtures"
 }
 
+local adapter_labels = {
+    mysql = "MySQL",
+    postgresql = "PostgreSQL",
+    postgres = "PostgreSQL",
+    sqlite = "SQLite"
+}
+
 local function strip_ansi(value)
     return tostring(value or ""):gsub(ANSI_PATTERN, "")
 end
@@ -121,48 +128,119 @@ local function add_results(summary, list, status)
     end
 end
 
-local function add_warning_from_line(registry, line)
+local function normalize_adapter(adapter)
+    adapter = tostring(adapter or ""):lower()
+    if adapter == "postgres" then
+        return "postgresql"
+    end
+    return adapter
+end
+
+local function adapter_label(adapter)
+    adapter = normalize_adapter(adapter)
+    return adapter_labels[adapter] or adapter
+end
+
+local function add_database_skip(registry, adapter, detail)
+    adapter = normalize_adapter(adapter)
+    if adapter == "" then return end
+
+    registry:add({
+        key = "database." .. adapter .. ".unavailable",
+        category = "database",
+        subject = adapter_label(adapter),
+        reason = "driver unavailable",
+        message = adapter_label(adapter),
+        detail = detail
+    })
+end
+
+local function add_warning_from_line(environment_registry, warning_registry, line)
     local module = line:match("Database driver '([^']+)' is not installed")
     if module then
         local adapter = module:match("%.([^%.]+)$") or module
-        registry:add(
-            "missing-driver:" .. adapter,
-            adapter .. " driver unavailable",
-            "missing `" .. module .. "`"
-        )
+        add_database_skip(environment_registry, adapter, "missing `" .. module .. "`")
         return
     end
 
     local skip_context = line:match("%[SKIP%]%s+%[([^%]]+)%]")
     if skip_context then
-        local adapter = line:match("Connection failed for ([%w_%-]+)") or skip_context
-        registry:add(
-            "skip:" .. adapter,
-            skip_context,
-            line:gsub("^%s*%[SKIP%]%s*", "")
-        )
+        local adapter = line:match("Connection failed for ([%w_%-]+)")
+        if adapter then
+            add_database_skip(environment_registry, adapter, "connection failed")
+        else
+            warning_registry:add(
+                "skip:" .. skip_context,
+                skip_context,
+                line:gsub("^%s*%[SKIP%]%s*", "")
+            )
+        end
     end
 end
 
-local function collect_warnings(output)
-    local registry = WarningRegistry.new()
+local function collect_notices(output)
+    local environments = WarningRegistry.new()
+    local warnings = WarningRegistry.new()
+
     for line in strip_ansi(output):gmatch("[^\r\n]+") do
-        add_warning_from_line(registry, line)
+        add_warning_from_line(environments, warnings, line)
     end
-    return registry:all()
+
+    return environments:all(), warnings:all()
 end
 
 local function collect_performance(output)
     local metrics = {}
+    local current_section
+
+    local function display_label_for(section, label)
+        section = tostring(section or "")
+        label = tostring(label or "")
+
+        if section:find("QUERY CACHE", 1, true) and label == "Speedup Factor" then
+            return "Query cache speedup"
+        end
+
+        if section:find("HIGH CONCURRENCY", 1, true) and label == "Throughput" then
+            return "HTTP concurrency throughput"
+        end
+
+        if section:find("SQLITE", 1, true) and label == "Throughput" then
+            return "SQLite query throughput"
+        end
+
+        if section ~= "" then
+            return section:gsub("%s+", " "):lower():gsub("^%l", string.upper) .. " " .. label
+        end
+
+        return label
+    end
+
+    local function add_metric(label, value)
+        label = label:gsub("%s+$", "")
+        table.insert(metrics, {
+            suite = current_section,
+            label = label,
+            display_label = display_label_for(current_section, label),
+            value = value
+        })
+    end
+
     for line in strip_ansi(output):gmatch("[^\r\n]+") do
+        local section = line:match("^│%s*([%u][%u%s%d%(%):%-]+)%s*│$")
+            or line:match("^%s*([%u][%u%s%d%(%):%-]+)%s*$")
+        if section then
+            current_section = section:gsub("%s+$", "")
+        end
+
         local label, value = line:match("PASS%s+([%w%s%(%)/:%-]+)%s+│%s+([%d%.]+%s*req/s)")
         if label and value then
-            table.insert(metrics, { label = label:gsub("%s+$", ""), value = value })
+            add_metric(label, value)
         end
 
         label, value = line:match("PASS%s+([%w%s%(%)/:%-]+)%s+│%s+([%d%.]+x faster)")
         if label and value then
-            table.insert(metrics, { label = label:gsub("%s+$", ""), value = value })
+            add_metric(label, value)
         end
     end
     return metrics
@@ -200,6 +278,7 @@ end
 
 function M.build(output, exit_code)
     local data = extract_json(output)
+    local environment_skips, warnings = collect_notices(output)
     local summary = {
         status = "failed",
         exit_code = exit_code or 1,
@@ -211,7 +290,8 @@ function M.build(output, exit_code)
         duration = 0,
         groups = {},
         group_order = {},
-        warnings = collect_warnings(output),
+        environment_skips = environment_skips,
+        warnings = warnings,
         performance = collect_performance(output),
         failures = {},
         errors_list = {},
@@ -242,6 +322,22 @@ function M.build(output, exit_code)
             group.errors = summary.errors
             group.pending = summary.pending
             group.duration = summary.duration
+        elseif summary.exit_code ~= 0 then
+            local message = strip_ansi(output):match("^%s*(.-)%s*$")
+            if message == "" then
+                message = "Busted failed before producing parseable output."
+            end
+
+            local result = {
+                name = "Unable to parse Busted output",
+                message = message
+            }
+            local group = ensure_group(summary.groups, summary.group_order, DEFAULT_SUITE)
+            group.tests = 1
+            group.errors = 1
+            summary.tests = 1
+            summary.errors = 1
+            table.insert(summary.errors_list, result)
         end
     end
 
