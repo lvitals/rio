@@ -134,11 +134,34 @@ describe("Rio CLI Command Dispatch", function()
     end)
 
     it("keeps cli.run as a thin dispatcher", function()
+        local command_ok
+        local exit_code
         local output = helpers.capture_prints(function()
-            require("rio.cli").run({ "unknown" }, "lib/?.lua;lib/?/init.lua", "bin/rio")
+            command_ok, exit_code = require("rio.cli").run({ "unknown" }, "lib/?.lua;lib/?/init.lua", "bin/rio")
         end)
 
+        assert.is_false(command_ok)
+        assert.equals(1, exit_code)
         assert.truthy(output:find("Unknown command 'unknown'", 1, true))
         assert.truthy(output:find("RIO FRAMEWORK CLI", 1, true))
+    end)
+
+    it("returns a non-zero process status for unknown commands", function()
+        local result = helpers.run(helpers.shell_quote(helpers.bin_path()) .. " unknown")
+
+        assert.is_false(result.ok)
+        assert.equals(1, result.code)
+        assert.truthy(result.output:find("Unknown command 'unknown'", 1, true))
+    end)
+
+    it("returns busted failures from the rio executable", function()
+        local command = helpers.shell_quote(helpers.bin_path())
+            .. " test "
+            .. helpers.shell_quote("test/fixtures/failing_spec.lua")
+        local result = helpers.run(command)
+
+        assert.is_false(result.ok)
+        assert.equals(1, result.code)
+        assert.truthy(result.output:find("1 failure", 1, true))
     end)
 end)

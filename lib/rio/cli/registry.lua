@@ -64,7 +64,7 @@ function Registry:dispatch(invocation, context)
         return true, false, exit_code
     end
 
-    return true, true, exit_code
+    return true, true, exit_code or 0
 end
 
 function M.with_defaults(extra_modules)

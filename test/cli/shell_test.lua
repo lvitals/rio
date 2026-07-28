@@ -89,6 +89,10 @@ describe("Rio CLI shell command helpers", function()
         assert.equals(130, shell.status_code(nil, "signal", 2))
     end)
 
+    it("normalizes encoded numeric os.execute statuses", function()
+        assert.equals(23, shell.status_code(23 * 256))
+    end)
+
     it("returns busted failures without terminating the process", function()
         local original_execute = shell.execute
         local original_detect_executable_path = test_command.detect_executable_path

@@ -8,7 +8,7 @@ local cli_context = require("rio.cli.context")
 cli.colors = ui.colors
 cli.ui = ui
 
-function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_path here
+function cli.run(args, framework_lib_path, bin_path)
     local invocation = cli_parser.parse(args, {
         shift_subcommand_for = {
             generate = true,
@@ -22,13 +22,13 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
 
     if not invocation.command then
         context.show_general_help()
-        return
+        return true, 0
     end
 
     local registry = cli_registry.with_defaults()
-    local handled, ok, exit_code = registry:dispatch(invocation, context)
+    local handled, command_ok, exit_code = registry:dispatch(invocation, context)
     if handled then
-        if ok == false then
+        if command_ok == false then
             return false, exit_code or 1
         end
         return true, exit_code or 0
@@ -36,6 +36,7 @@ function cli.run(args, framework_lib_path, bin_path) -- Receive framework_lib_pa
 
     ui.status("CLI command", false, "Unknown command '" .. tostring(invocation.full_command) .. "'")
     context.show_general_help()
+    return false, 1
 end
 
 return cli

@@ -29,7 +29,12 @@ end
 
 function M.status_code(ok, exit_type, code)
     if ok == true then return 0 end
-    if type(ok) == "number" then return ok end
+    if type(ok) == "number" then
+        if ok > 255 then
+            return math.floor(ok / 256)
+        end
+        return ok
+    end
     if exit_type == "signal" and type(code) == "number" then
         return 128 + code
     end
