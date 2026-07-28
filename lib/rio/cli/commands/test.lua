@@ -8,6 +8,7 @@ local M = {}
 function M.run(ctx, test_args)
     ctx.ui.header("Running Rio tests with Busted")
     local effective_lua_path, effective_lua_cpath = ctx.get_lua_paths()
+    local project_lua_path = "./?.lua;./?/init.lua;./lib/?.lua;./lib/?/init.lua"
 
     local home = os.getenv("HOME") or os.getenv("USERPROFILE") or "."
     local busted_path_addition = home .. "/.luarocks/bin"
@@ -19,7 +20,8 @@ function M.run(ctx, test_args)
 
     local lua_bin = compat.get_lua_bin()
     local command = string.format(
-        "export LUA_PATH='%s;%s;%s' && export LUA_CPATH='%s;%s' && export RIO_ENV='test' && export RIO_HASH_ITERATIONS='1' && export PATH='%s:%s' && busted --lua=%s --output=utfTerminal --helper=test/spec_helper.lua %s",
+        "export LUA_PATH='%s;%s;%s;%s' && export LUA_CPATH='%s;%s' && export RIO_ENV='test' && export RIO_HASH_ITERATIONS='1' && export PATH='%s:%s' && busted --lua=%s --output=utfTerminal --helper=test/spec_helper.lua %s",
+        project_lua_path,
         ctx.framework_lib_path,
         effective_lua_path,
         package.path,

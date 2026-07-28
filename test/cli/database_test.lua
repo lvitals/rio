@@ -9,8 +9,59 @@ local database = require("rio.cli.database")
 local drivers = require("rio.database.drivers")
 local ui = require("rio.utils.ui")
 local helpers = require("test.cli.helpers")
+local lfs = require("lfs")
 
 describe("Rio CLI Database Services", function()
+    it("loads project database config when LuaRocks package.path omits the current directory", function()
+        local root = helpers.tmpdir("rio_db_config")
+        helpers.mkdir_p(root .. "/config")
+        helpers.write(root .. "/config/database.lua", [[
+return {
+    development = {
+        adapter = "sqlite",
+        database = "db/development.sqlite3"
+    }
+}
+]])
+
+        local original_dir = assert(lfs.currentdir())
+        local original_package_path = package.path
+        package.path = helpers.repo_root() .. "/lib/?.lua;" .. helpers.repo_root() .. "/lib/?/init.lua"
+
+        local ok, err = pcall(function()
+            assert.truthy(lfs.chdir(root))
+
+            local db_core = require("rio.cli.commands.db_core").new({
+                ui = ui,
+                colors = ui.colors,
+                db_drivers = {},
+                get_lua_paths = function() return package.path, package.cpath end,
+                normalize_database_adapter = function(adapter) return adapter end,
+                is_database_driver_available = function() return true end,
+                ensure_database_driver_available = function() return true end,
+                print_driver_install_hint = function() end,
+                create_dir_if_not_exists = function() end,
+                write_file_content = function() end,
+                file_exists = function(path)
+                    return helpers.exists(path)
+                end,
+                database_config = {
+                    generate = function() return "" end
+                }
+            })
+
+            local config = db_core.load_config()
+            assert.equals("sqlite", config.development.adapter)
+            assert.equals("db/development.sqlite3", config.development.database)
+        end)
+
+        lfs.chdir(original_dir)
+        package.path = original_package_path
+        helpers.remove_tree(root)
+
+        if not ok then error(err, 2) end
+    end)
+
     it("normalizes documented adapter aliases", function()
         local service = database.new({
             ui = ui,

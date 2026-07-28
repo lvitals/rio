@@ -21,6 +21,30 @@ function M.new(ctx)
     local function generate_database_content(database_adapter, project_name, config)
         return cli_database_config.generate(database_adapter, project_name, config)
     end
+
+    local function project_package_path()
+        return "./?.lua;./?/init.lua;./app/?.lua;./app/?/init.lua;./config/?.lua;./config/?/init.lua;./lib/?.lua;./lib/?/init.lua;"
+    end
+
+    local function load_project_database_config()
+        local config_file = "config/database.lua"
+        if not file_exists(config_file) then
+            return false, "Database configuration file not found"
+        end
+
+        local original_package_path = package.path
+        package.path = project_package_path() .. package.path
+
+        local chunk, load_err = loadfile(config_file)
+        if not chunk then
+            package.path = original_package_path
+            return false, load_err
+        end
+
+        local status, db_config = pcall(chunk)
+        package.path = original_package_path
+        return status, db_config
+    end
     
     local function interactive_db_setup()
         ui.header("Rio Database Setup")
@@ -93,11 +117,7 @@ function M.new(ctx)
             end
             
             -- Reload config
-            package.loaded["config.database"] = nil
-            local original_package_path = package.path
-            package.path = "./config/?.lua;" .. package.path
-            local status, db_config = pcall(require, "config.database")
-            package.path = original_package_path
+            local status, db_config = load_project_database_config()
             return status and db_config or nil
         end
         return nil
@@ -105,14 +125,7 @@ function M.new(ctx)
     
     -- Database commands
     local function load_database_config()
-        local config_file = "config/database.lua"
-        
-        -- To load config.database, we need to ensure the current project's config directory is in LUA_PATH
-        local original_package_path = package.path
-        package.path = "./config/?.lua;" .. package.path
-    
-        local status, db_config = pcall(require, "config.database") -- require "config.database"
-        package.path = original_package_path -- Restore original path
+        local status, db_config = load_project_database_config()
     
         if not status or type(db_config) ~= "table" or next(db_config) == nil then
             -- If config is missing, malformed or empty, trigger interactive setup
@@ -122,11 +135,7 @@ function M.new(ctx)
     end
     
     local function read_database_config()
-        local original_package_path = package.path
-        package.path = "./config/?.lua;" .. package.path
-    
-        local status, db_config = pcall(require, "config.database")
-        package.path = original_package_path
+        local status, db_config = load_project_database_config()
     
         if not status or type(db_config) ~= "table" or next(db_config) == nil then
             return nil
@@ -560,7 +569,7 @@ function M.new(ctx)
         local original_package_cpath = package.cpath
         
         -- Prepend project paths so migrations and seeds can require models
-        package.path = "./app/?.lua;./app/?/init.lua;./config/?.lua;./lib/?.lua;" .. effective_lua_path .. ";" .. original_package_path
+        package.path = project_package_path() .. effective_lua_path .. ";" .. original_package_path
         package.cpath = effective_lua_cpath .. ";" .. original_package_cpath
     
         local Migrate = require("rio.database.migrate").Migrate
@@ -622,7 +631,7 @@ function M.new(ctx)
         local original_package_path = package.path
         local original_package_cpath = package.cpath
         
-        package.path = "./app/?.lua;./app/?/init.lua;./config/?.lua;./lib/?.lua;" .. effective_lua_path .. ";" .. original_package_path
+        package.path = project_package_path() .. effective_lua_path .. ";" .. original_package_path
         package.cpath = effective_lua_cpath .. ";" .. original_package_cpath
     
         local DB = require("rio.database.manager")

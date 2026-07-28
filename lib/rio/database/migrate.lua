@@ -68,7 +68,7 @@ function Migrate.run()
                 pending = pending + 1
                 ui.alert_title("primary", "migrating", name)
                 
-                local ok, mod = pcall(require, file:gsub("%.lua$", ""):gsub("/", "."))
+                local ok, mod = pcall(require, "db.migrate." .. name)
                 if not ok then
                     ui.error("Error loading migration: " .. tostring(mod))
                     break
