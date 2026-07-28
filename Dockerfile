@@ -24,7 +24,7 @@ RUN update-alternatives --set lua-interpreter /usr/bin/lua5.4 \
 
 WORKDIR /app
 
-COPY rio-dev-1.rockspec rio-0.1.21-1.rockspec ./
+COPY rio-dev-1.rockspec rio-0.1.22-1.rockspec ./
 
 RUN luarocks --lua-version=5.4 install busted \
     && luarocks --lua-version=5.4 install bestline \

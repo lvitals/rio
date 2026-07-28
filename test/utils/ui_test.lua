@@ -38,16 +38,17 @@ describe("Rio UI Utils", function()
     end)
 
     it("keeps test runner header values padded inside the box", function()
+        local version = "release.version"
         local output = capture_prints(function()
             terminal_formatter.header({
-                version = "0.1.21",
+                version = version,
                 lua_version = "Lua 5.4",
                 environment = "test"
             })
         end)
 
-        assert.truthy(output:find("v0.1.21 │", 1, true))
-        assert.is_nil(output:find("v0.1.21│", 1, true))
+        assert.truthy(output:find("v" .. version .. " │", 1, true))
+        assert.is_nil(output:find("v" .. version .. "│", 1, true))
     end)
 
     it("wraps long status details instead of truncating them", function()

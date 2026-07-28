@@ -5,6 +5,10 @@ local project_paths = require("rio.cli.project_paths")
 
 local M = {}
 
+local LINE_EDITOR_MODULE = "bestline"
+
+M.line_editor_module = LINE_EDITOR_MODULE
+
 local function lua_string(value)
     return string.format("%q", tostring(value or ""))
 end
@@ -231,7 +235,7 @@ end
 -- Custom REPL logic to support automatic pretty-printing
 local function start_repl()
     local string_utils = require("rio.utils.string")
-    local line_editor_ok, line_editor = pcall(require, "bestline")
+    local line_editor_ok, line_editor = pcall(require, ]] .. lua_string(LINE_EDITOR_MODULE) .. [[)
     local env_name = ']] .. env .. [['
     
     -- Prompt colors based on environment
