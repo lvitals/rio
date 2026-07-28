@@ -8,10 +8,20 @@ end
 
 local migrate = require("rio.database.migrate")
 local DBManager = require("rio.database.manager")
+local helpers = require("test.cli.helpers")
+local lfs = require("lfs")
+local project_paths = require("rio.cli.project_paths")
 
 describe("Rio Database Migrations", function()
     local mock_adapter
     local mock_conn
+
+    local function write_migration(root, basename, body)
+        local file = root .. "/db/migrate/" .. basename .. ".lua"
+        helpers.write(file, body)
+        local migration_name = file:match("([^/\\]+)%.lua$")
+        return migration_name, "db.migrate." .. migration_name
+    end
 
     before_each(function()
         mock_adapter = {
@@ -57,5 +67,75 @@ describe("Rio Database Migrations", function()
         local inst = migration:new(mock_conn, "sqlite")
         local sql = inst:down()
         assert.equals("DROP TABLE manual", sql)
+    end)
+
+    it("loads migration files through the db.migrate namespace", function()
+        local root = helpers.tmpdir("rio_migration_namespace")
+        helpers.mkdir_p(root .. "/db/migrate")
+        local migration_action = "create"
+        local migration_table = "widgets"
+        local migration_basename = migration_action .. "_" .. migration_table
+        local create_table_sql = "CREATE TABLE " .. migration_table .. " (id INTEGER PRIMARY KEY)"
+
+        local migration_name, module_name = write_migration(root, migration_basename, string.format([[
+local Migration = require("rio.database.migrate").Migration
+
+local MigrationUnderTest = Migration:extend()
+
+function MigrationUnderTest:up()
+    return %q
+end
+
+return MigrationUnderTest
+]], create_table_sql))
+
+        local original_dir = assert(lfs.currentdir())
+        local original_package_path = package.path
+        local original_get_connection = DBManager.get_connection
+        local original_get_adapter_name = DBManager.get_adapter_name
+        local original_get_adapter = DBManager.get_adapter
+        package.loaded[module_name] = nil
+
+        local executed_sql
+        local recorded_name
+        local ok, err = pcall(function()
+            assert.truthy(lfs.chdir(root))
+            package.path = project_paths.lua_path() .. ";" .. project_paths.lua_path(helpers.repo_root()) .. ";" .. package.path
+
+            local conn = {
+                execute = function(_, sql)
+                    executed_sql = sql
+                    return true
+                end,
+                commit = function() end
+            }
+            local adapter = {
+                ensure_migrations_table = function() return true end,
+                get_last_batch = function() return 0 end,
+                get_executed_migrations = function() return {} end,
+                record_migration = function(_, name)
+                    recorded_name = name
+                end
+            }
+
+            DBManager.get_connection = function() return conn end
+            DBManager.get_adapter_name = function() return "sqlite" end
+            DBManager.get_adapter = function() return adapter end
+
+            migrate.Migrate.run()
+
+            assert.equals(create_table_sql, executed_sql)
+            assert.equals(migration_name, recorded_name)
+        end)
+
+        DBManager.get_connection = original_get_connection
+        DBManager.get_adapter_name = original_get_adapter_name
+        DBManager.get_adapter = original_get_adapter
+        package.loaded[module_name] = nil
+        package.path = original_package_path
+        lfs.chdir(original_dir)
+        helpers.remove_tree(root)
+
+        if not ok then error(err, 2) end
     end)
 end)

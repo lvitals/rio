@@ -1,6 +1,7 @@
 -- rio/lib/rio/cli/commands/routes.lua
 
 local Command = require("rio.cli.command")
+local project_paths = require("rio.cli.project_paths")
 
 local M = {}
 
@@ -188,7 +189,7 @@ function M.run(ctx, options)
         return
     end
 
-    package.path = "./?.lua;./app/?.lua;./app/?/init.lua;./config/?.lua;./lib/?.lua;" .. ctx.framework_lib_path .. ";" .. effective_lua_path .. ";" .. original_package_path
+    package.path = project_paths.lua_path() .. ";" .. ctx.framework_lib_path .. ";" .. effective_lua_path .. ";" .. original_package_path
     package.cpath = effective_lua_cpath .. ";" .. original_package_cpath
 
     local function restore_paths()

@@ -3,6 +3,7 @@
 
 local M = {}
 local files = require("rio.cli.files")
+local project_paths = require("rio.cli.project_paths")
 
 function M.new(ctx)
     local ui = ctx.ui
@@ -22,28 +23,25 @@ function M.new(ctx)
         return cli_database_config.generate(database_adapter, project_name, config)
     end
 
-    local function project_package_path()
-        return "./?.lua;./?/init.lua;./app/?.lua;./app/?/init.lua;./config/?.lua;./config/?/init.lua;./lib/?.lua;./lib/?/init.lua;"
-    end
-
     local function load_project_database_config()
         local config_file = "config/database.lua"
         if not file_exists(config_file) then
-            return false, "Database configuration file not found"
+            return false, "Database configuration file not found", "missing"
         end
 
         local original_package_path = package.path
-        package.path = project_package_path() .. package.path
+        package.path = project_paths.lua_path() .. ";" .. original_package_path
 
-        local chunk, load_err = loadfile(config_file)
-        if not chunk then
-            package.path = original_package_path
-            return false, load_err
-        end
-
-        local status, db_config = pcall(chunk)
+        local status, result = pcall(function()
+            local chunk, load_err = loadfile(config_file)
+            if not chunk then
+                error(load_err, 0)
+            end
+            return chunk()
+        end)
         package.path = original_package_path
-        return status, db_config
+
+        return status, result, status and nil or "load_error"
     end
     
     local function interactive_db_setup()
@@ -125,10 +123,17 @@ function M.new(ctx)
     
     -- Database commands
     local function load_database_config()
-        local status, db_config = load_project_database_config()
+        local status, db_config, reason = load_project_database_config()
     
-        if not status or type(db_config) ~= "table" or next(db_config) == nil then
-            -- If config is missing, malformed or empty, trigger interactive setup
+        if not status then
+            if reason == "missing" then
+                return interactive_db_setup()
+            end
+            ui.status("Database configuration", false, "Unable to load config/database.lua: " .. tostring(db_config))
+            return nil
+        end
+
+        if type(db_config) ~= "table" or next(db_config) == nil then
             return interactive_db_setup()
         end
         return db_config
@@ -569,7 +574,7 @@ function M.new(ctx)
         local original_package_cpath = package.cpath
         
         -- Prepend project paths so migrations and seeds can require models
-        package.path = project_package_path() .. effective_lua_path .. ";" .. original_package_path
+        package.path = project_paths.lua_path() .. ";" .. effective_lua_path .. ";" .. original_package_path
         package.cpath = effective_lua_cpath .. ";" .. original_package_cpath
     
         local Migrate = require("rio.database.migrate").Migrate
@@ -631,7 +636,7 @@ function M.new(ctx)
         local original_package_path = package.path
         local original_package_cpath = package.cpath
         
-        package.path = project_package_path() .. effective_lua_path .. ";" .. original_package_path
+        package.path = project_paths.lua_path() .. ";" .. effective_lua_path .. ";" .. original_package_path
         package.cpath = effective_lua_cpath .. ";" .. original_package_cpath
     
         local DB = require("rio.database.manager")

@@ -1,8 +1,13 @@
 -- rio/lib/rio/cli/commands/console.lua
 
 local Command = require("rio.cli.command")
+local project_paths = require("rio.cli.project_paths")
 
 local M = {}
+
+local function lua_string(value)
+    return string.format("%q", tostring(value or ""))
+end
 
 local function parse_options(args, ui)
     local options = {}
@@ -31,6 +36,7 @@ function M.run(ctx, console_options)
     local camel_case = ctx.camel_case
     local rio_framework_lib_path_global = ctx.framework_lib_path
     local rio_bin_path_global = ctx.bin_path
+    local project_lua_path = project_paths.lua_path()
     -- Verify if we are inside an Rio project
     local ok_project = io.open("config/application.lua", "r")
     if ok_project then
@@ -62,7 +68,7 @@ function M.run(ctx, console_options)
     local temp_bootstrap_file = "rio_console_bootstrap.lua"
     local bootstrap_content = {
         "-- Console bootstrap script",
-        "package.path = './app/?.lua;./app/?/init.lua;./config/?.lua;./lib/?.lua;' .. '" .. rio_framework_lib_path_global .. ";' .. package.path",
+        "package.path = " .. lua_string(project_lua_path .. ";" .. rio_framework_lib_path_global .. ";") .. " .. package.path",
         "local rio = require('rio')",
         "local db_manager = require('rio.database.manager')",
         "local ok_db_config, db_config = pcall(require, 'config.database')",

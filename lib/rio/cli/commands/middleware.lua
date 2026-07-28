@@ -2,6 +2,7 @@
 
 local Command = require("rio.cli.command")
 local string_utils = require("rio.utils.string")
+local project_paths = require("rio.cli.project_paths")
 
 local M = {}
 local underscore = string_utils.underscore
@@ -32,7 +33,7 @@ function M.list(ctx)
     local original_package_path = package.path
     local original_package_cpath = package.cpath
 
-    package.path = "./?.lua;./app/?.lua;./app/?/init.lua;./config/?.lua;./lib/?.lua;" .. ctx.framework_lib_path .. ";" .. effective_lua_path .. ";" .. original_package_path
+    package.path = project_paths.lua_path() .. ";" .. ctx.framework_lib_path .. ";" .. effective_lua_path .. ";" .. original_package_path
     package.cpath = effective_lua_cpath .. ";" .. original_package_cpath
 
     local function restore_paths()

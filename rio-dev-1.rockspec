@@ -54,6 +54,7 @@ build = {
       ["rio.cli.parser"] = "lib/rio/cli/parser.lua",
       ["rio.cli.ports"] = "lib/rio/cli/ports.lua",
       ["rio.cli.project"] = "lib/rio/cli/project.lua",
+      ["rio.cli.project_paths"] = "lib/rio/cli/project_paths.lua",
       ["rio.cli.registry"] = "lib/rio/cli/registry.lua",
       ["rio.cli.commands.about"] = "lib/rio/cli/commands/about.lua",
       ["rio.cli.commands.db"] = "lib/rio/cli/commands/db.lua",

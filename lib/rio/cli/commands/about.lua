@@ -1,6 +1,7 @@
 -- rio/lib/rio/cli/commands/about.lua
 
 local Command = require("rio.cli.command")
+local project_paths = require("rio.cli.project_paths")
 
 local M = {}
 
@@ -11,7 +12,7 @@ function M.run(ctx)
     local original_package_path = package.path
     local original_package_cpath = package.cpath
 
-    package.path = "./?.lua;./app/?.lua;./app/?/init.lua;./config/?.lua;./lib/?.lua;" .. ctx.framework_lib_path .. ";" .. effective_lua_path .. ";" .. original_package_path
+    package.path = project_paths.lua_path() .. ";" .. ctx.framework_lib_path .. ";" .. effective_lua_path .. ";" .. original_package_path
     package.cpath = effective_lua_cpath .. ";" .. original_package_cpath
 
     local ok_rio, rio = pcall(require, "rio")
@@ -34,7 +35,7 @@ function M.run(ctx)
     local environment = os.getenv("RIO_ENV") or "development"
 
     local original_path_for_db = package.path
-    package.path = "./config/?.lua;" .. original_path_for_db
+    package.path = project_paths.lua_path() .. ";" .. original_path_for_db
     local db_config_status, db_config = pcall(require, "config.database")
     package.path = original_path_for_db
 

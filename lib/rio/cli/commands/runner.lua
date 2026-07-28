@@ -1,8 +1,13 @@
 -- rio/lib/rio/cli/commands/runner.lua
 
 local Command = require("rio.cli.command")
+local project_paths = require("rio.cli.project_paths")
 
 local M = {}
+
+local function lua_string(value)
+    return string.format("%q", tostring(value or ""))
+end
 
 local function parse_options(args, ui)
     local options = {}
@@ -54,6 +59,7 @@ function M.run(ctx, runner_options, code_or_file, script_args)
     local skip_executor = runner_options.skip_executor or false
 
     local effective_lua_path, effective_lua_cpath = ctx.get_lua_paths()
+    local project_lua_path = project_paths.lua_path()
     _G.RIO_ENV = env
     package.path = effective_lua_path
     package.cpath = effective_lua_cpath
@@ -69,7 +75,7 @@ function M.run(ctx, runner_options, code_or_file, script_args)
 
         local bootstrap_content = {
             "-- Runner bootstrap",
-            "package.path = './app/?.lua;./app/?/init.lua;./config/?.lua;./lib/?.lua;' .. '" .. ctx.framework_lib_path .. ";' .. package.path",
+            "package.path = " .. lua_string(project_lua_path .. ";" .. ctx.framework_lib_path .. ";") .. " .. package.path",
             "local rio = require('rio')",
             "local db_manager = require('rio.database.manager')",
             "local ok_db_config, db_config = pcall(require, 'config.database')",
