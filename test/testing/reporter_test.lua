@@ -20,9 +20,20 @@ describe("Rio testing reporter", function()
         local summary = reporter.build([[{"duration":1.25,"successes":[{"name":"database ok","trace":{"short_src":"test/database/model_test.lua"},"element":{"duration":0.12}},{"name":"cli ok","trace":{"short_src":"test/cli/shell_test.lua"},"element":{"duration":0.04}}],"failures":[],"errors":[],"pendings":[]}]], 0)
 
         assert.equals("passed", summary.status)
+        assert.equals(1, summary.schema_version)
         assert.equals(2, summary.tests)
         assert.equals(1, summary.groups.Database.tests)
         assert.equals(1, summary.groups.CLI.tests)
+    end)
+
+    it("extracts busted json even when a test prints before it on the same line", function()
+        local prefix = "[FALLBACK: NO ASYNC DRIVER]"
+        local json = [[{"duration":0.5,"successes":[{"name":"ok","trace":{"short_src":"test/database/postgres_adapter_test.lua"},"element":{"duration":0.1}}],"failures":[],"errors":[],"pendings":[]}]]
+        local summary = reporter.build(prefix .. " " .. json, 0)
+
+        assert.equals("passed", summary.status)
+        assert.equals(1, summary.tests)
+        assert.equals(1, summary.groups.Database.tests)
     end)
 
     it("deduplicates unavailable database environments by root cause", function()
@@ -47,23 +58,47 @@ describe("Rio testing reporter", function()
     end)
 
     it("keeps repeated performance metric names with their section context", function()
+        local storage_section = "SQLITE CONNECTIVITY INFO"
+        local cache_section = "QUERY CACHE PERFORMANCE (LEVEL 1)"
+        local concurrency_section = "HIGH CONCURRENCY BENCHMARK"
+        local request_metric = "Throughput (Req/s)"
+        local statement_metric = "Throughput (Stmt/s)"
+        local speedup_metric = "Speedup Factor"
+        local throughput_metric = "Throughput"
+
         local output = table.concat({
-            "│                      QUERY CACHE PERFORMANCE (LEVEL 1)                       │",
-            "│  ✓ PASS Speedup Factor                   │ 6.8x faster                       │",
-            "│                          HIGH CONCURRENCY BENCHMARK                          │",
-            "│  ✓ PASS Throughput                       │ 2205.57 req/s                     │",
+            "│                           " .. storage_section .. "                           │",
+            "│  ✓ PASS " .. request_metric .. "              │ 148703.14                         │",
+            "│  ✓ PASS " .. statement_metric .. "             │ 73411.91                          │",
+            "│                      " .. cache_section .. "                       │",
+            "│  ✓ PASS " .. speedup_metric .. "                   │ 6.8x faster                       │",
+            "│                          " .. concurrency_section .. "                          │",
+            "│  ✓ PASS " .. throughput_metric .. "                       │ 2205.57 req/s                     │",
             [[{"duration":0,"successes":[],"failures":[],"errors":[],"pendings":[]}]]
         }, "\n")
 
         local summary = reporter.build(output, 0)
 
-        assert.equals(2, #summary.performance)
-        assert.equals("QUERY CACHE PERFORMANCE (LEVEL 1)", summary.performance[1].suite)
-        assert.equals("Speedup Factor", summary.performance[1].label)
-        assert.equals("Query cache speedup", summary.performance[1].display_label)
-        assert.equals("HIGH CONCURRENCY BENCHMARK", summary.performance[2].suite)
-        assert.equals("Throughput", summary.performance[2].label)
-        assert.equals("HTTP concurrency throughput", summary.performance[2].display_label)
+        assert.equals(4, #summary.performance)
+        assert.equals(storage_section, summary.performance[1].suite)
+        assert.equals(request_metric, summary.performance[1].label)
+        assert.equals("SQLite request throughput", summary.performance[1].display_label)
+        assert.equals("148703.14 req/s", summary.performance[1].value)
+        assert.equals(statement_metric, summary.performance[2].label)
+        assert.equals("SQLite statement throughput", summary.performance[2].display_label)
+        assert.equals("73411.91 stmt/s", summary.performance[2].value)
+        assert.equals(cache_section, summary.performance[3].suite)
+        assert.equals(speedup_metric, summary.performance[3].label)
+        assert.equals("Query cache speedup", summary.performance[3].display_label)
+        assert.equals(concurrency_section, summary.performance[4].suite)
+        assert.equals(throughput_metric, summary.performance[4].label)
+        assert.equals("High concurrency throughput", summary.performance[4].display_label)
+    end)
+
+    it("uses a specific group for reporter infrastructure tests", function()
+        local summary = reporter.build([[{"duration":0,"successes":[{"name":"reporter ok","trace":{"short_src":"test/testing/reporter_test.lua"},"element":{"duration":0.01}}],"failures":[],"errors":[],"pendings":[]}]], 0)
+
+        assert.equals(1, summary.groups.Testing.tests)
     end)
 
     it("reports unparseable failing output as an error", function()

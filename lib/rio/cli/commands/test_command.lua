@@ -137,10 +137,6 @@ function M.build(options)
     return shell.join_commands(command_parts)
 end
 
-function M.captured_output_format()
-    return CAPTURED_BUSTED_OUTPUT_FORMAT
-end
-
 function M.output_format_for(options)
     if options and options.verbose then
         return nil

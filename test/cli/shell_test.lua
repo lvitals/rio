@@ -171,6 +171,51 @@ describe("Rio CLI shell command helpers", function()
         end
     end)
 
+    it("prints structured json without raw captured output", function()
+        local original_capture = shell.capture
+        local original_detect_executable_path = test_command.detect_executable_path
+        local original_print = _G.print
+        local printed = {}
+
+        local ok, err = xpcall(function()
+            shell.capture = function()
+                return {
+                    ok = true,
+                    code = 0,
+                    output = [[{"duration":0,"successes":[],"failures":[],"errors":[],"pendings":[]}]]
+                }
+            end
+            test_command.detect_executable_path = function(fallback_path)
+                return fallback_path
+            end
+            _G.print = function(value)
+                table.insert(printed, tostring(value))
+            end
+
+            local success, exit_code = test_cli_command.run({
+                ui = { status = function() end },
+                framework_lib_path = "/rio/lib/?.lua",
+                get_lua_paths = function()
+                    return "/rocks/share/?.lua", "/rocks/lib/?.so"
+                end
+            }, { "--format=json" })
+
+            local encoded = table.concat(printed, "\n")
+            assert.is_true(success)
+            assert.equals(0, exit_code)
+            assert.truthy(encoded:find([["schema_version":1]], 1, true))
+            assert.is_nil(encoded:find("raw_output", 1, true))
+        end, debug.traceback)
+
+        shell.capture = original_capture
+        test_command.detect_executable_path = original_detect_executable_path
+        _G.print = original_print
+
+        if not ok then
+            error(err, 0)
+        end
+    end)
+
     it("keeps verbose runs on Busted terminal output", function()
         local original_execute = shell.execute
         local original_detect_executable_path = test_command.detect_executable_path

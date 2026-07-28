@@ -10,7 +10,6 @@ local BOX_HORIZONTAL_PADDING = " "
 local SUITE_COLUMN = 34
 local COUNT_COLUMN = 10
 local DURATION_COLUMN = 10
-local PERFORMANCE_LABEL_COLUMN = 36
 local WARNING_MESSAGE_COLUMN = 34
 local COLUMN_SEPARATOR = "  "
 
@@ -32,6 +31,15 @@ local function pad_right(value, width)
         return value:sub(1, width)
     end
     return value .. string.rep(" ", width - #value)
+end
+
+local function pad_right_full(value, width)
+    value = tostring(value or "")
+    local length = ui.visible_len(value)
+    if length >= width then
+        return value
+    end
+    return value .. string.rep(" ", width - length)
 end
 
 local function pad_left(value, width)
@@ -120,6 +128,18 @@ function M.groups(summary, options)
     end
 end
 
+local function performance_label_width(metrics)
+    local width = 0
+
+    for _, metric in ipairs(metrics or {}) do
+        local label = metric.display_label or metric.label
+        local length = ui.visible_len(label)
+        if length > width then width = length end
+    end
+
+    return width
+end
+
 function M.performance(summary)
     if not summary.performance or #summary.performance == 0 then return end
 
@@ -128,10 +148,13 @@ function M.performance(summary)
     print("")
     print("  " .. colorize(colors.blue, "Performance"))
     print("")
+
+    local label_width = performance_label_width(summary.performance)
+
     for _, metric in ipairs(summary.performance) do
         local label = metric.display_label or metric.label
         print("  "
-            .. pad_right(label, PERFORMANCE_LABEL_COLUMN)
+            .. pad_right_full(label, label_width)
             .. COLUMN_SEPARATOR
             .. colorize(colors.cyan, metric.value))
     end
@@ -146,7 +169,7 @@ function M.environment_skips(summary)
     print("  " .. colorize(colors.yellow, "Skipped environments"))
     print("")
     for _, item in ipairs(summary.environment_skips) do
-        local occurrences = item.count > 1 and (" (" .. item.count .. " affected checks)") or ""
+        local occurrences = item.count > 1 and (" (" .. item.count .. " occurrences)") or ""
         local reason = item.reason or "unavailable"
         local detail = item.detail and (" " .. item.detail) or ""
         print("  " .. pad_right(item.subject or item.message, 12)

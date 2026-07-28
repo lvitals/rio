@@ -6,16 +6,7 @@ local M = {}
 
 local ANSI_PATTERN = "\27%[[%d;?]*[mKhlABCDEFGJKST]"
 local DEFAULT_SUITE = "Tests"
-
-local suite_labels = {
-    ["test/cli/"] = "CLI",
-    ["test/core/"] = "Core",
-    ["test/database/"] = "Database",
-    ["test/integration/"] = "Integration",
-    ["test/middleware/"] = "Middleware",
-    ["test/utils/"] = "Utilities",
-    ["test/fixtures/"] = "Fixtures"
-}
+local SCHEMA_VERSION = 1
 
 local adapter_labels = {
     mysql = "MySQL",
@@ -24,8 +15,106 @@ local adapter_labels = {
     sqlite = "SQLite"
 }
 
+local acronyms = {
+    api = "API",
+    cli = "CLI",
+    db = "DB",
+    http = "HTTP",
+    json = "JSON",
+    jwt = "JWT",
+    mysql = "MySQL",
+    postgres = "Postgres",
+    sql = "SQL",
+    sqlite = "SQLite",
+    ui = "UI"
+}
+
+local section_noise_words = {
+    benchmark = true,
+    benchmarks = true,
+    connectivity = true,
+    info = true,
+    level = true,
+    performance = true
+}
+
+local metric_noise_words = {
+    factor = true
+}
+
+local unit_labels = {
+    req = "request",
+    stmt = "statement"
+}
+
+local unit_suffixes = {
+    req = "req/s",
+    stmt = "stmt/s"
+}
+
 local function strip_ansi(value)
     return tostring(value or ""):gsub(ANSI_PATTERN, "")
+end
+
+local function normalize_words(value)
+    local words = {}
+    value = tostring(value or ""):lower():gsub("[^%w]+", " ")
+
+    for word in value:gmatch("%S+") do
+        table.insert(words, acronyms[word] or word:gsub("^%l", string.upper))
+    end
+
+    return words
+end
+
+local function phrase(words)
+    return table.concat(words or {}, " ")
+end
+
+local function readable_phrase(words)
+    local result = {}
+
+    for index, word in ipairs(words or {}) do
+        if index == 1 or word:match("^%u+$") or word == "SQLite" then
+            table.insert(result, word)
+        else
+            table.insert(result, word:lower())
+        end
+    end
+
+    return table.concat(result, " ")
+end
+
+local function remove_repeated_words(primary, secondary)
+    local seen = {}
+    local result = {}
+
+    for _, word in ipairs(primary or {}) do
+        seen[tostring(word):lower()] = true
+    end
+
+    for _, word in ipairs(secondary or {}) do
+        if not seen[tostring(word):lower()] then
+            table.insert(result, word)
+        end
+    end
+
+    return result
+end
+
+local function remove_words(words, ignored)
+    local result = {}
+    for _, word in ipairs(words or {}) do
+        if not ignored[tostring(word):lower()] and not tonumber(word) then
+            table.insert(result, word)
+        end
+    end
+    return result
+end
+
+local function sentence_case(value)
+    value = tostring(value or "")
+    return value:sub(1, 1):upper() .. value:sub(2)
 end
 
 local function decode_json_line(line)
@@ -48,8 +137,14 @@ local function extract_json(output)
     local decoded
     for line in tostring(output or ""):gmatch("[^\r\n]+") do
         local trimmed = line:match("^%s*(.-)%s*$")
-        if trimmed:sub(1, 1) == "{" and trimmed:sub(-1) == "}" then
-            decoded = decode_json_line(trimmed) or decoded
+        local candidate = trimmed
+
+        if trimmed:sub(1, 1) ~= "{" then
+            candidate = trimmed:match("({.*})%s*$")
+        end
+
+        if candidate and candidate:sub(1, 1) == "{" and candidate:sub(-1) == "}" then
+            decoded = decode_json_line(candidate) or decoded
         end
     end
     return decoded
@@ -68,17 +163,17 @@ end
 
 local function suite_for(source)
     source = tostring(source or "")
-    if source:match("^test/async_") then
-        return "Async"
+
+    local nested_dir = source:match("^test/([^/]+)/")
+    if nested_dir then
+        return phrase(normalize_words(nested_dir))
     end
-    if source:match("^test/benchmark") then
-        return "Performance"
+
+    local file_prefix = source:match("^test/([^_/%-]+)")
+    if file_prefix then
+        return phrase(normalize_words(file_prefix))
     end
-    for prefix, label in pairs(suite_labels) do
-        if source:find(prefix, 1, true) == 1 then
-            return label
-        end
-    end
+
     return DEFAULT_SUITE
 end
 
@@ -193,27 +288,43 @@ local function collect_performance(output)
     local metrics = {}
     local current_section
 
+    local function section_phrase(section)
+        return readable_phrase(remove_words(normalize_words(section), section_noise_words))
+    end
+
+    local function metric_words(label)
+        local metric_name, unit = tostring(label or ""):match("^(.-)%s*%((.-)%)$")
+        local words = {}
+        local unit_key = unit and unit:match("^([%a]+)") and unit:match("^([%a]+)"):lower()
+
+        for word in tostring(metric_name or label):lower():gmatch("%w+") do
+            if not metric_noise_words[word] and not tonumber(word) then
+                table.insert(words, word)
+            end
+        end
+
+        if unit_key and unit_labels[unit_key] then
+            table.insert(words, 1, unit_labels[unit_key])
+        end
+
+        return words
+    end
+
     local function display_label_for(section, label)
-        section = tostring(section or "")
-        label = tostring(label or "")
+        local section_words = remove_words(normalize_words(section), section_noise_words)
+        local metric_words_list = remove_repeated_words(section_words, metric_words(label))
+        local section_text = readable_phrase(section_words)
+        local metric_text = table.concat(metric_words_list, " ")
 
-        if section:find("QUERY CACHE", 1, true) and label == "Speedup Factor" then
-            return "Query cache speedup"
+        if section_text ~= "" and metric_text ~= "" then
+            return sentence_case(section_text .. " " .. metric_text)
         end
 
-        if section:find("HIGH CONCURRENCY", 1, true) and label == "Throughput" then
-            return "HTTP concurrency throughput"
+        if metric_text ~= "" then
+            return sentence_case(metric_text)
         end
 
-        if section:find("SQLITE", 1, true) and label == "Throughput" then
-            return "SQLite query throughput"
-        end
-
-        if section ~= "" then
-            return section:gsub("%s+", " "):lower():gsub("^%l", string.upper) .. " " .. label
-        end
-
-        return label
+        return sentence_case(section_text)
     end
 
     local function add_metric(label, value)
@@ -224,6 +335,17 @@ local function collect_performance(output)
             display_label = display_label_for(current_section, label),
             value = value
         })
+    end
+
+    local function append_unit_from_label(label, value)
+        local unit = tostring(label or ""):match("%((.-)%)")
+        local unit_key = unit and unit:match("^([%a]+)") and unit:match("^([%a]+)"):lower()
+
+        if unit_key and unit_suffixes[unit_key] then
+            return tostring(value) .. " " .. unit_suffixes[unit_key]
+        end
+
+        return value
     end
 
     for line in strip_ansi(output):gmatch("[^\r\n]+") do
@@ -241,6 +363,11 @@ local function collect_performance(output)
         label, value = line:match("PASS%s+([%w%s%(%)/:%-]+)%s+│%s+([%d%.]+x faster)")
         if label and value then
             add_metric(label, value)
+        end
+
+        label, value = line:match("PASS%s+([%w%s%(%)/:%-]+)%s+│%s+([%d%.]+)%s+│")
+        if label and value and tostring(label):find("%(") then
+            add_metric(label, append_unit_from_label(label, value))
         end
     end
     return metrics
@@ -280,6 +407,7 @@ function M.build(output, exit_code)
     local data = extract_json(output)
     local environment_skips, warnings = collect_notices(output)
     local summary = {
+        schema_version = SCHEMA_VERSION,
         status = "failed",
         exit_code = exit_code or 1,
         tests = 0,
