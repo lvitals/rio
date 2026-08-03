@@ -4,9 +4,6 @@ local cqueues = compat.cqueues
 
 local manager = require("rio.database.manager")
 local Model = require("rio.database.model")
-local ui = require("rio.utils.ui")
-local colors = require("rio.utils.compat").colors
-local etl = require("rio.utils.etl")
 
 local test_config = require("test.test_config")
 
@@ -67,35 +64,17 @@ describe("Rio Framework Full Async API Suite", function()
             
             local cq_ok = cq:loop()
 
-            -- Use the new Framework UI features
-            ui.box("ASYNC SUITE: " .. adapter_name:upper(), function()
-                ui.info("Database initialized with adapter: " .. adapter_name)
-                ui.info("Test table 'users' prepared successfully.")
-            end)
-
-            ui.status("db.async_query", results.q1.res ~= nil, string.format("%.4f s", results.q1.dur))
-            if results.q1.res then ui.table(results.q1.res) end
-
-            ui.status("db.async_insert", results.q2.res ~= nil, string.format("%.4f s", results.q2.dur))
-            
-            ui.status("Model:async_create", results.q3.res ~= nil, string.format("%.4f s", results.q3.dur))
-            if results.q3.res then ui.table({results.q3.res}, "New User Attributes") end
-
-            ui.status("Model:async_find", results.q4.res ~= nil, string.format("%.4f s", results.q4.dur))
-            if results.q4.res then ui.table({results.q4.res}, "Found User #" .. tostring(results.q2.res or 1)) end
-
-            ui.status("Model:async_all", results.q5.res ~= nil, string.format("%.4f s", results.q5.dur))
-            if results.q5.res then ui.table(results.q5.res, "All Users") end
-
-            if adapter_name ~= "sqlite" then
-                ui.status("Multi-Statement", results.q6.res ~= nil, string.format("%.4f s", results.q6.dur))
-                if results.q6.res then ui.table(results.q6.res, "Multi-Statement Results") end
-            end
-            
-            ui.success(adapter_name:upper() .. " suite finished successfully.")
-
             assert.is_true(cq_ok)
             assert.is_not_nil(results.q1.res)
+            assert.is_nil(results.q1.err)
+            assert.is_not_nil(results.q2.res)
+            assert.is_not_nil(results.q3.res)
+            assert.is_not_nil(results.q4.res)
+            assert.is_not_nil(results.q5.res)
+
+            if adapter_name ~= "sqlite" then
+                assert.is_not_nil(results.q6.res)
+            end
         end)
     end
 

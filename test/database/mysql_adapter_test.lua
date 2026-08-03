@@ -1,11 +1,3 @@
-if not describe then
-    print("\n" .. string.rep("=", 60))
-    print("[ERROR] This test file must be run using the 'busted' test runner.")
-    print("Usage: busted " .. (arg and arg[0] or "test/database/mysql_adapter_test.lua"))
-    print(string.rep("=", 60) .. "\n")
-    os.exit(1)
-end
-
 local mysql = require("rio.database.adapters.mysql")
 local cqueues = require("cqueues")
 local test_config = require("test.test_config")
@@ -29,17 +21,10 @@ describe("Rio MySQL Adapter", function()
         end
     end)
 
-    it("should connect and provide diagnostic info", function()
+    it("should connect", function()
         if test_config.skip_if_no_db(adapter_name, "MySQL Adapter") then return end
         local conn, env = mysql.get_connection()
         assert.is_not_nil(conn)
-        
-        RioUI.box("MySQL/MariaDB Connectivity Info", function()
-            RioUI.status("Database Connection", true, config.database)
-            RioUI.status("Driver Async Mode", (conn.poll ~= nil), "MariaDB Non-blocking API active")
-            RioUI.status("Cqueues Integration", (pcall(require, "cqueues")), "Ready for Event Loop")
-        end)
-        
         mysql.release_connection(conn, env)
     end)
 

@@ -1,11 +1,3 @@
-if not describe then
-    print("\n" .. string.rep("=", 60))
-    print("[ERROR] This test file must be run using the 'busted' test runner.")
-    print("Usage: busted " .. (arg and arg[0] or "test/integration/consecutive_inserts_test.lua"))
-    print(string.rep("=", 60) .. "\n")
-    os.exit(1)
-end
-
 local test_config = require("test.test_config")
 
 local ADAPTER_CASES = {

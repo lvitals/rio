@@ -1,11 +1,3 @@
-if not describe then
-    print("\n" .. string.rep("=", 60))
-    print("[ERROR] This test file must be run using the 'busted' test runner.")
-    print("Usage: busted " .. (arg and arg[0] or "test/database/sqlite_adapter_test.lua"))
-    print(string.rep("=", 60) .. "\n")
-    os.exit(1)
-end
-
 local sqlite = require("rio.database.adapters.sqlite")
 local cqueues = require("cqueues")
 
@@ -19,16 +11,9 @@ describe("Rio SQLite Adapter", function()
         sqlite.initialize(config)
     end)
 
-    it("should connect and provide diagnostic info", function()
+    it("should connect", function()
         local conn, env = sqlite.get_connection()
         assert.is_not_nil(conn)
-        
-        RioUI.box("SQLite Connectivity Info", function()
-            RioUI.status("Database Connection", true, config.database)
-            RioUI.status("Driver Async-like Mode", true, (conn.getfd ~= nil) and "Active" or "Inactive (Synchronous)")
-            RioUI.status("Cqueues Integration", (pcall(require, "cqueues")), "Ready for Event Loop")
-        end)
-        
         sqlite.release_connection(conn, env)
     end)
 

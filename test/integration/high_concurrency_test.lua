@@ -1,15 +1,7 @@
-if not describe then
-    print("\n" .. string.rep("=", 60))
-    print("[ERROR] This test file must be run using the 'busted' test runner.")
-    print("Usage: busted " .. (arg and arg[0] or "test/integration/high_concurrency_test.lua"))
-    print(string.rep("=", 60) .. "\n")
-    os.exit(1)
-end
-
 local cqueues = require("cqueues")
 local http_request = require("http.request")
-local rio = require("rio")
 local Server = require("rio.server")
+local metrics = require("rio.testing.metrics")
 
 -- Pre-load internal modules to avoid path resolution issues during high-concurrency coroutines
 require("rio.database.manager")
@@ -32,7 +24,8 @@ describe("Rio Framework High Concurrency Benchmark", function()
         local app = Server.new({ 
             perform_caching = false,
             app_name = "BenchmarkApp",
-            cq = cq 
+            cq = cq,
+            quiet = true
         })
         
         -- Setup simple routes
@@ -108,7 +101,8 @@ describe("Rio Framework High Concurrency Benchmark", function()
         while (completed + errors_count) < REQUEST_COUNT and cqueues.monotime() < deadline do
             local ok, err = cq:step(0.1)
             if not ok then
-                print("Event Loop Step Error: " .. tostring(err))
+                last_error = "Event Loop Step Error: " .. tostring(err)
+                errors_count = errors_count + 1
                 break
             end
         end
@@ -116,22 +110,16 @@ describe("Rio Framework High Concurrency Benchmark", function()
         local end_time = cqueues.monotime()
         local duration = end_time - start_time
 
-        RioUI.box("High Concurrency Benchmark", function()
-            RioUI.status("Total Requests", true, REQUEST_COUNT)
-            RioUI.status("Successful", completed == REQUEST_COUNT, completed)
-            RioUI.status("Errors Detected", errors_count == 0, errors_count)
-            RioUI.status("Total Time", true, string.format("%.4fs", duration))
-            RioUI.status("Throughput", true, string.format("%.2f req/s", completed / duration))
-            
-            if errors_count > 0 then
-                RioUI.info("Last Error: " .. tostring(last_error))
-            end
-        end)
-
         -- Cleanup
         app:close()
 
-        assert.equals(REQUEST_COUNT, completed, "Some requests failed to process correctly")
-        assert.equals(0, errors_count, "Requests completed with errors")
+        assert.equals(0, errors_count, tostring(last_error or "Requests completed with errors"))
+        assert.equals(REQUEST_COUNT, completed, tostring(last_error or "Some requests failed to process correctly"))
+
+        metrics.record(
+            "HIGH CONCURRENCY BENCHMARK",
+            "Throughput",
+            string.format("%.2f req/s", completed / duration)
+        )
     end)
 end)

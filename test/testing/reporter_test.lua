@@ -1,8 +1,3 @@
-if not describe then
-    print("Usage: busted test/testing/reporter_test.lua")
-    os.exit(1)
-end
-
 package.path = "./?.lua;./?/init.lua;lib/?.lua;lib/?/init.lua;" .. package.path
 
 local reporter = require("rio.testing.reporter")
@@ -100,6 +95,19 @@ describe("Rio testing reporter", function()
         assert.equals(concurrency_section, summary.performance[5].suite)
         assert.equals(throughput_metric, summary.performance[5].label)
         assert.equals("High concurrency throughput", summary.performance[5].display_label)
+    end)
+
+    it("collects structured performance metrics without visual test output", function()
+        local output = table.concat({
+            "[RIO_PERF]\tQUERY CACHE PERFORMANCE (LEVEL 1)\tSpeedup Factor\t6.8x faster",
+            [[{"duration":0,"successes":[],"failures":[],"errors":[],"pendings":[]}]]
+        }, "\n")
+
+        local summary = reporter.build(output, 0)
+
+        assert.equals(1, #summary.performance)
+        assert.equals("Query cache speedup", summary.performance[1].display_label)
+        assert.equals("6.8x faster", summary.performance[1].value)
     end)
 
     it("uses a specific group for reporter infrastructure tests", function()

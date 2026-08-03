@@ -61,15 +61,15 @@ function M.run(ctx, test_args)
         executable_path = test_command.detect_executable_path(os.getenv("PATH") or ""),
         lua_bin = compat.get_lua_bin(),
         test_args = busted_args,
-        output_format = output_format
+        output_format = output_format,
+        report_metrics = options.report or options.format == "json"
     })
 
     if options.debug then
         ctx.ui.info(command, "Command")
     end
 
-    if options.verbose then
-        ctx.ui.header("Running Rio tests with Busted")
+    if options.format == "terminal" and not options.report and not options.quiet then
         local ok, exit_code = shell.execute(command)
         if not ok then
             return false, exit_code
@@ -77,7 +77,7 @@ function M.run(ctx, test_args)
         return true, 0
     end
 
-    if options.format ~= "json" and not options.quiet then
+    if options.report and options.format ~= "json" and not options.quiet then
         terminal_formatter.header({
             version = rio_version(),
             lua_version = _VERSION,
@@ -92,8 +92,17 @@ function M.run(ctx, test_args)
         if not print_json(summary) then
             return false, 1
         end
-    else
+    elseif options.report or options.quiet or summary.status ~= "passed" then
+        if not options.report and not options.quiet then
+            terminal_formatter.header({
+                version = rio_version(),
+                lua_version = _VERSION,
+                environment = "test"
+            })
+        end
         terminal_formatter.render(summary, { quiet = options.quiet })
+    else
+        -- Silent success path.
     end
 
     if not result.ok then

@@ -1,11 +1,3 @@
-if not describe then
-    print("\n" .. string.rep("=", 60))
-    print("[ERROR] This test file must be run using the 'busted' test runner.")
-    print("Usage: busted " .. (arg and arg[0] or "test/database/postgres_adapter_test.lua"))
-    print(string.rep("=", 60) .. "\n")
-    os.exit(1)
-end
-
 local postgres = require("rio.database.adapters.postgres")
 local cqueues = require("cqueues")
 local test_config = require("test.test_config")
@@ -29,17 +21,10 @@ describe("Rio PostgreSQL Adapter", function()
         end
     end)
 
-    it("should connect and provide diagnostic info", function()
+    it("should connect", function()
         if test_config.skip_if_no_db(adapter_name, "PostgreSQL Adapter") then return end
         local conn, env = postgres.get_connection()
         assert.is_not_nil(conn)
-        
-        RioUI.box("PostgreSQL Connectivity Info", function()
-            RioUI.status("Database Connection", true, config.database)
-            RioUI.status("Driver Cooperative Mode", (conn.getfd ~= nil), "I/O Multiplexing active")
-            RioUI.status("Cqueues Integration", (pcall(require, "cqueues")), "Ready for Event Loop")
-        end)
-        
         postgres.release_connection(conn, env)
     end)
 

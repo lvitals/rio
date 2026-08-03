@@ -1,11 +1,3 @@
-if not describe then
-    print("\n" .. string.rep("=", 60))
-    print("[ERROR] This test file must be run using the 'busted' test runner.")
-    print("Usage: busted test/database/model_report_test.lua")
-    print(string.rep("=", 60) .. "\n")
-    os.exit(1)
-end
-
 local Model = require("rio.database.model")
 local DBManager = require("rio.database.manager")
 
@@ -49,56 +41,58 @@ describe("ActiveRecord Comprehensive Report", function()
         os.remove(db_file)
     end)
 
-    it("should generate the full professional comprehensive report", function()
-        RioUI.box("Rio ActiveRecord Diagnostic", function()
-            -- 1. CRUD & HOOKS
-            RioUI.text("--- CRUD & HOOKS ---", RioColor.yellow)
-            local user = User:new({ username = "leandro", name = "Leandro", email = "leandro@example.com", age = 30, password = "secret_password" })
-            local saved = user:save()
-            RioUI.status("Save new model", saved)
-            RioUI.status("Auto-generated ID", user.id ~= nil, "ID: " .. (user.id or "N/A"))
+    it("should exercise ActiveRecord model behavior end to end", function()
+        local user = User:new({
+            username = "leandro",
+            name = "Leandro",
+            email = "leandro@example.com",
+            age = 30,
+            password = "secret_password"
+        })
 
-            -- 2. VALIDATIONS
-            RioUI.text("--- VALIDATIONS ---", RioColor.yellow)
-            local invalid_user = User:new({ username = "leandro", email = "invalid", age = "abc", password = "123" })
-            local ok = invalid_user:save()
-            RioUI.status("Reject invalid data", ok == false)
-            RioUI.status("Capture error messages", invalid_user.errors:any(), "Errors: " .. invalid_user.errors:size())
+        assert.is_true(user:save())
+        assert.is_not_nil(user.id)
 
-            -- 3. QUERY METHODS
-            RioUI.text("--- QUERY METHODS ---", RioColor.yellow)
-            local found = User:find(user.id)
-            RioUI.status("Find by ID", found ~= nil and found.username == "leandro")
-            RioUI.status("Exists check", User:exists({ username = "leandro" }))
-            RioUI.status("Count check", User:count() == 1, "Total: " .. User:count())
+        local invalid_user = User:new({
+            username = "leandro",
+            email = "invalid",
+            age = "abc",
+            password = "123"
+        })
 
-            -- 4. RELATIONSHIPS
-            RioUI.text("--- RELATIONSHIPS ---", RioColor.yellow)
-            local post = user.posts:create({ title = "Report Post" })
-            RioUI.status("HasMany: Create child", post ~= nil and post.id ~= nil)
-            RioUI.status("HasMany: Lazy count", user.posts:count() == 1)
-            RioUI.status("BelongsTo: Load parent", post.user ~= nil and post.user.username == "leandro")
+        assert.is_false(invalid_user:save())
+        assert.is_true(invalid_user.errors:any())
 
-            -- 5. SERIALIZATION
-            RioUI.text("--- SERIALIZATION ---", RioColor.yellow)
-            User.attributes = { "id", "username", "name", "age", "email" }
-            local data = user:toTable()
-            for k, v in pairs(data) do
-                RioUI.info(string.format("  %-15s | %-20s", k, tostring(v)))
-            end
+        local found = User:find(user.id)
+        assert.is_not_nil(found)
+        assert.equals("leandro", found.username)
+        assert.is_true(User:exists({ username = "leandro" }))
+        assert.equals(1, User:count())
 
-            -- 6. SOFT DELETE & CALCULATIONS
-            RioUI.text("--- SOFT DELETE & CALCULATIONS ---", RioColor.yellow)
-            user:delete()
-            RioUI.status("Hide soft-deleted", User:find(user.id) == nil)
-            local raw_count = DBManager.query("SELECT COUNT(*) as c FROM users")[1].c
-            RioUI.status("Retain in raw DB", raw_count == 1, "Raw Count: 1")
-            
-            User:new({ username = "user2", email = "u2@ex.com", age = 20, password = "password" }):save()
-            RioUI.status("Calculation: AVG", User:avg("age") == 20.0, "Avg: 20.0")
-            RioUI.status("Calculation: SUM", User:sum("age") == 20, "Sum: 20")
-        end)
-        
-        assert.is_true(true)
+        local post = user.posts:create({ title = "Report Post" })
+        assert.is_not_nil(post)
+        assert.is_not_nil(post.id)
+        assert.equals(1, user.posts:count())
+        assert.equals("leandro", post.user.username)
+
+        User.attributes = { "id", "username", "name", "age", "email" }
+        local data = user:toTable()
+        assert.equals("leandro", data.username)
+        assert.equals("Leandro", data.name)
+        assert.equals("leandro@example.com", data.email)
+        assert.is_nil(data.password)
+
+        user:delete()
+        assert.is_nil(User:find(user.id))
+        assert.equals(1, tonumber(DBManager.query("SELECT COUNT(*) as c FROM users")[1].c))
+
+        assert.is_true(User:new({
+            username = "user2",
+            email = "u2@ex.com",
+            age = 20,
+            password = "password"
+        }):save())
+        assert.equals(20.0, User:avg("age"))
+        assert.equals(20, User:sum("age"))
     end)
 end)

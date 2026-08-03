@@ -350,6 +350,13 @@ local function collect_performance(output)
     end
 
     for line in strip_ansi(output):gmatch("[^\r\n]+") do
+        local structured_section, structured_label, structured_value =
+            line:match("^%[RIO_PERF%]\t([^\t]*)\t([^\t]*)\t([^\t]*)$")
+        if structured_section and structured_label and structured_value then
+            current_section = structured_section
+            add_metric(structured_label, structured_value)
+        end
+
         local section = line:match("^│%s*([%u][%u%s%d%(%):%-]+)%s*│$")
             or line:match("^%s*([%u][%u%s%d%(%):%-]+)%s*$")
         if section then

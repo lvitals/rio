@@ -80,6 +80,9 @@ docker compose up -d   # or: podman-compose up -d
 chmod +x test/run_tests.sh
 ./test/run_tests.sh
 
+# Show Rio's compact test report
+rio test --report
+
 # Tear down the database containers
 docker compose down   # or: podman-compose down
 ```

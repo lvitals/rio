@@ -1,8 +1,3 @@
-if not describe then
-    print("Usage: busted test/cli/commands_dispatch_test.lua")
-    os.exit(1)
-end
-
 package.path = "lib/?.lua;lib/?/init.lua;" .. package.path
 
 local helpers = require("test.cli.helpers")
@@ -162,6 +157,7 @@ describe("Rio CLI Command Dispatch", function()
 
         assert.is_false(result.ok)
         assert.equals(1, result.code)
-        assert.truthy(result.output:find("Test run failed", 1, true))
+        assert.truthy(result.output:find("0 successes / 1 failure", 1, true))
+        assert.truthy(result.output:find("fails intentionally", 1, true))
     end)
 end)

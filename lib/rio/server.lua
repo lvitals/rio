@@ -271,17 +271,19 @@ function Server:listen(port, host)
 
     if not ok then return nil, inst end
     
-    local env = self.config.environment or os.getenv("RIO_ENV") or "development"
-    ui.header("Rio Framework")
-    ui.row_simple("Environment", env)
-    ui.row_simple("Listening", string.format("http://%s:%d", h, p))
-    
-    if compat.http_server_is_fallback then
-        ui.warn("Using fallback server (WebSockets not supported)")
-        ui.info("Install 'lua-http' for full WebSocket support: luarocks install http")
-    end
+    if not self.config.quiet then
+        local env = self.config.environment or os.getenv("RIO_ENV") or "development"
+        ui.header("Rio Framework")
+        ui.row_simple("Environment", env)
+        ui.row_simple("Listening", string.format("http://%s:%d", h, p))
+        
+        if compat.http_server_is_fallback then
+            ui.warn("Using fallback server (WebSockets not supported)")
+            ui.info("Install 'lua-http' for full WebSocket support: luarocks install http")
+        end
 
-    ui.info("Press Ctrl+C to stop the server")
+        ui.info("Press Ctrl+C to stop the server")
+    end
 
     self.server_inst = inst
     return inst

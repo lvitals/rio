@@ -1,8 +1,3 @@
-if not describe then
-    print("Usage: busted test/cli/context_test.lua")
-    os.exit(1)
-end
-
 package.path = "lib/?.lua;lib/?/init.lua;" .. package.path
 
 local context_builder = require("rio.cli.context")

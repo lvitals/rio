@@ -8,9 +8,8 @@
 
 require "test.spec_helper"
 local cqueues = require("cqueues")
-local condition = require("cqueues.condition")
 local db_manager = require("rio.database.manager")
-local ui = require("rio.utils.ui")
+local metrics = require("rio.testing.metrics")
 
 local test_config = require("test.test_config")
 
@@ -80,22 +79,19 @@ describe("Rio Framework Async Adapters Benchmark", function()
             local throughput_req = NUM_QUERIES / total_time
             local throughput_stmt = total_workload / total_time
 
-            ui.box(adapter_name:upper() .. " PERFORMANCE " .. mode_label, function()
-                ui.status("Total Requests", true, tostring(NUM_QUERIES))
-                ui.status("Statements/Req", true, tostring(statements_per_req))
-                ui.status("Total Workload", true, tostring(total_workload) .. " results")
-                ui.status("Concurrency", true, tostring(CONCURRENCY) .. " workers")
-                ui.status("Total Time", true, string.format("%.4f s", total_time))
-                ui.status("Throughput (Req/s)", true, string.format("%.2f", throughput_req))
-                ui.status("Throughput (Stmt/s)", true, string.format("%.2f", throughput_stmt))
-                if errors > 0 then
-                    ui.status("Errors", false, tostring(errors))
-                else
-                    ui.status("Errors", true, "0")
-                end
-            end)
-            
             assert.equals(0, errors, adapter_name .. " encountered errors during benchmark")
+            assert.is_true(total_time >= 0)
+
+            metrics.record(
+                adapter_name:upper() .. " PERFORMANCE " .. mode_label,
+                "Throughput (Req/s)",
+                string.format("%.2f", throughput_req)
+            )
+            metrics.record(
+                adapter_name:upper() .. " PERFORMANCE " .. mode_label,
+                "Throughput (Stmt/s)",
+                string.format("%.2f", throughput_stmt)
+            )
         end)
     end
 

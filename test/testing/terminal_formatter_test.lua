@@ -1,8 +1,3 @@
-if not describe then
-    print("Usage: busted test/testing/terminal_formatter_test.lua")
-    os.exit(1)
-end
-
 package.path = "./?.lua;./?/init.lua;lib/?.lua;lib/?/init.lua;" .. package.path
 
 local terminal_formatter = require("rio.testing.formatters.terminal")

@@ -44,7 +44,7 @@ end
 function M.parse_args(args)
     local options = {
         format = "terminal",
-        verbose = false,
+        report = false,
         quiet = false,
         debug = false
     }
@@ -52,12 +52,13 @@ function M.parse_args(args)
 
     for _, arg in ipairs(args or {}) do
         if arg == "--verbose" then
-            options.verbose = true
+            return nil, nil, "--verbose is no longer supported. Use --report for Rio's compact report or --format=json for structured output."
+        elseif arg == "--report" then
+            options.report = true
         elseif arg == "--quiet" then
             options.quiet = true
         elseif arg == "--debug" then
             options.debug = true
-            options.verbose = true
         elseif tostring(arg):match("^%-%-format=") then
             options.format = tostring(arg):match("^%-%-format=(.*)$") or options.format
         else
@@ -67,13 +68,6 @@ function M.parse_args(args)
 
     if options.format == "" or not SUPPORTED_FORMATS[options.format] then
         return nil, nil, "Unknown test format: " .. tostring(options.format)
-    end
-
-    if options.verbose then
-        if options.format ~= "terminal" then
-            return nil, nil, "--format=" .. options.format .. " cannot be combined with --verbose"
-        end
-        options.quiet = false
     end
 
     return options, busted_args
@@ -123,6 +117,7 @@ function M.build(options)
         shell.export("LUA_CPATH", lua_cpath),
         shell.export("RIO_ENV", TEST_ENV),
         shell.export("RIO_HASH_ITERATIONS", FAST_HASH_ITERATIONS),
+        shell.export("RIO_TEST_REPORT_METRICS", options.report_metrics and "1" or "0"),
         shell.export("PATH", options.executable_path or "")
     }
 
@@ -138,7 +133,7 @@ function M.build(options)
 end
 
 function M.output_format_for(options)
-    if options and options.verbose then
+    if options and options.format == "terminal" and not options.report and not options.quiet then
         return nil
     end
 

@@ -1,8 +1,3 @@
-if not describe then
-    print("Usage: busted test/cli/console_test.lua")
-    os.exit(1)
-end
-
 package.path = "lib/?.lua;lib/?/init.lua;" .. package.path
 
 local console = require("rio.cli.commands.console")

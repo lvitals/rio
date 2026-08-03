@@ -1,8 +1,3 @@
-if not describe then
-    print("Usage: busted test/cli/shell_test.lua")
-    os.exit(1)
-end
-
 package.path = "./?.lua;./?/init.lua;lib/?.lua;lib/?/init.lua;" .. package.path
 
 local shell = require("rio.cli.shell")
@@ -80,6 +75,7 @@ describe("Rio CLI shell command helpers", function()
         })
 
         contains(command, shell.export("PATH", executable_path))
+        contains(command, shell.export("RIO_TEST_REPORT_METRICS", "0"))
         contains(command, framework_lua_path)
         contains(command, shell.quote(test_target))
         contains(command, shell.quote(filter_arg))
@@ -88,6 +84,7 @@ describe("Rio CLI shell command helpers", function()
     it("parses rio test reporter options separately from busted arguments", function()
         local options, busted_args = test_command.parse_args({
             "--quiet",
+            "--report",
             "--format=json",
             "test/cli",
             "--filter",
@@ -95,7 +92,7 @@ describe("Rio CLI shell command helpers", function()
         })
 
         assert.is_true(options.quiet)
-        assert.is_false(options.verbose)
+        assert.is_true(options.report)
         assert.equals("json", options.format)
         assert.same({ "test/cli", "--filter", "shell" }, busted_args)
     end)
@@ -107,17 +104,17 @@ describe("Rio CLI shell command helpers", function()
         assert.truthy(err:find("Unknown test format", 1, true))
     end)
 
-    it("rejects json output combined with verbose mode", function()
-        local options, _, err = test_command.parse_args({ "--format=json", "--verbose" })
+    it("rejects verbose mode", function()
+        local options, _, err = test_command.parse_args({ "--verbose" })
 
         assert.is_nil(options)
-        assert.truthy(err:find("cannot be combined", 1, true))
+        assert.truthy(err:find("no longer supported", 1, true))
     end)
 
-    it("lets verbose mode override quiet terminal output", function()
-        local options = assert(test_command.parse_args({ "--quiet", "--verbose" }))
+    it("keeps debug mode on captured Busted output", function()
+        local options = assert(test_command.parse_args({ "--debug" }))
 
-        assert.is_true(options.verbose)
+        assert.is_true(options.debug)
         assert.is_false(options.quiet)
     end)
 
@@ -216,7 +213,7 @@ describe("Rio CLI shell command helpers", function()
         end
     end)
 
-    it("keeps verbose runs on Busted terminal output", function()
+    it("runs default tests with Busted terminal output", function()
         local original_execute = shell.execute
         local original_detect_executable_path = test_command.detect_executable_path
         local captured_command
@@ -232,22 +229,74 @@ describe("Rio CLI shell command helpers", function()
 
             local success, exit_code = test_cli_command.run({
                 ui = {
-                    header = function() end,
+                    status = function() end,
                     info = function() end
                 },
                 framework_lib_path = "/rio/lib/?.lua",
                 get_lua_paths = function()
                     return "/rocks/share/?.lua", "/rocks/lib/?.so"
                 end
-            }, { "--verbose", "test/cli/shell_test.lua" })
+            }, { "test/cli/shell_test.lua" })
 
             assert.is_true(success)
             assert.equals(0, exit_code)
             contains(captured_command, "--output=" .. shell.quote("utfTerminal"))
+            contains(captured_command, shell.export("RIO_TEST_REPORT_METRICS", "0"))
         end, debug.traceback)
 
         shell.execute = original_execute
         test_command.detect_executable_path = original_detect_executable_path
+
+        if not ok then
+            error(err, 0)
+        end
+    end)
+
+    it("prints the compact terminal report with --report", function()
+        local original_capture = shell.capture
+        local original_detect_executable_path = test_command.detect_executable_path
+        local original_print = _G.print
+        local printed = {}
+        local captured_command
+
+        local ok, err = xpcall(function()
+            shell.capture = function(command)
+                captured_command = command
+                return {
+                    ok = true,
+                    code = 0,
+                    output = [[{"duration":0,"successes":[{"name":"ok","trace":{"short_src":"test/cli/shell_test.lua"},"element":{"duration":0.01}}],"failures":[],"errors":[],"pendings":[]}]]
+                }
+            end
+            test_command.detect_executable_path = function(fallback_path)
+                return fallback_path
+            end
+            _G.print = function(value)
+                table.insert(printed, tostring(value or ""))
+            end
+
+            local success, exit_code = test_cli_command.run({
+                ui = {
+                    status = function() end,
+                    info = function() end
+                },
+                framework_lib_path = "/rio/lib/?.lua",
+                get_lua_paths = function()
+                    return "/rocks/share/?.lua", "/rocks/lib/?.so"
+                end
+            }, { "--report", "test/cli/shell_test.lua" })
+
+            local output = table.concat(printed, "\n")
+            assert.is_true(success)
+            assert.equals(0, exit_code)
+            contains(captured_command, shell.export("RIO_TEST_REPORT_METRICS", "1"))
+            contains(output, "Rio Test Runner")
+            contains(output, "1 passed")
+        end, debug.traceback)
+
+        shell.capture = original_capture
+        test_command.detect_executable_path = original_detect_executable_path
+        _G.print = original_print
 
         if not ok then
             error(err, 0)

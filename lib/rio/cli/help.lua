@@ -76,12 +76,11 @@ function M.test(ctx)
     ctx.ui.header("Test Runner")
     ctx.ui.line("Usage: rio test [options] [busted_options]", ctx.colors.yellow)
 
-    ctx.ui.info("Runs Busted tests with Rio's compact reporter by default.")
+    ctx.ui.info("Runs Busted terminal output by default.")
     ctx.ui.info("Formats: --format=terminal or --format=json.")
-    ctx.ui.info("Use --quiet for summary-only terminal output or --verbose for raw Busted output.")
-    ctx.ui.info("--debug prints the shell command and enables --verbose.")
-    ctx.ui.info("--verbose cannot be combined with --format=json.")
-    ctx.ui.line("Example: rio test test/cli --verbose", ctx.colors.dim)
+    ctx.ui.info("Use --report for Rio's compact report or --quiet for summary-only terminal output.")
+    ctx.ui.info("--debug prints the shell command.")
+    ctx.ui.line("Example: rio test --report test/cli", ctx.colors.dim)
 end
 
 function M.db(ctx)

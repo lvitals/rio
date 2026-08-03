@@ -66,7 +66,7 @@ function Migrate.run()
         if name and not executed[name] then
             repeat -- Emulate continue
                 pending = pending + 1
-                ui.alert_title("primary", "migrating", name)
+                if DB.verbose then ui.alert_title("primary", "migrating", name) end
                 
                 local ok, mod = pcall(require, "db.migrate." .. name)
                 if not ok then
@@ -89,7 +89,7 @@ function Migrate.run()
                 adapter.record_migration(conn, name, current_batch)
                 if conn.commit then conn:commit() end
                 
-                ui.success("Done!")
+                print_success("Done!")
             until true
         end
     end

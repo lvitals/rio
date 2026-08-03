@@ -1,15 +1,6 @@
-if not describe then
-    print("\n" .. string.rep("=", 60))
-    print("[ERROR] This test file must be run using the \"busted\" test runner.")
-    print("Usage: busted test/database/query_cache_test.lua")
-    print(string.rep("=", 60) .. "\n")
-    os.exit(1)
-end
-
 local DBManager = require("rio.database.manager")
 local Model = require("rio.database.model")
-local RioUI = _G.RioUI or require("rio.utils.ui")
-
+local metrics = require("rio.testing.metrics")
 DBManager.verbose = false -- Silence DB logs during tests
 
 local QUERY_CACHE_BENCHMARK_ITERATIONS =
@@ -120,24 +111,16 @@ describe("ActiveRecord Query Cache", function()
             for _ = 1, QUERY_CACHE_BENCHMARK_ITERATIONS do User:all() end
             local time_cache = os.clock() - start_cache
 
-            RioUI.box("Query Cache Performance (Level 1)", function()
-                RioUI.status(
-                    string.format("No Cache (%d queries)", QUERY_CACHE_BENCHMARK_ITERATIONS),
-                    true,
-                    string.format("%.6fs", time_no_cache)
-                )
-                RioUI.status(
-                    string.format("Cache Hit (%d queries)", QUERY_CACHE_BENCHMARK_ITERATIONS),
-                    true,
-                    string.format("%.6fs", time_cache)
-                )
-                if time_cache > 0 then
-                    RioUI.status("Speedup Factor", true, string.format("%.1fx faster", time_no_cache / time_cache))
-                end
-            end)
-            
             assert.is_true(time_no_cache >= 0)
             assert.is_true(time_cache >= 0)
+
+            if time_cache > 0 then
+                metrics.record(
+                    "QUERY CACHE PERFORMANCE (LEVEL 1)",
+                    "Speedup Factor",
+                    string.format("%.1fx faster", time_no_cache / time_cache)
+                )
+            end
         end)
     end)
 end)
